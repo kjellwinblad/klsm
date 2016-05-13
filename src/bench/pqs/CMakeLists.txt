@@ -54,3 +54,22 @@ target_include_directories(spraylist PUBLIC
     ${CMAKE_SOURCE_DIR}/lib/spraylist/atomic_ops
     ${CMAKE_SOURCE_DIR}/lib/spraylist/include
 )
+
+
+add_library(qdcatree STATIC
+    ${CMAKE_SOURCE_DIR}/lib/spraylist/ssalloc.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_qdcatree_set.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/eseq_skiplist.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/qd_lock.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/tatas_lock.c
+    qdcatree.cpp
+)
+set_target_properties(qdcatree PROPERTIES COMPILE_FLAGS
+    "-w -std=gnu11"
+)
+target_include_directories(qdcatree PUBLIC
+    ${CMAKE_SOURCE_DIR}/lib
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc
+    ${CMAKE_SOURCE_DIR}/lib/spraylist/include
+)
