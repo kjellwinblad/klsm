@@ -1,4 +1,4 @@
-#include "skiplist_qdcatree_set.h"
+#include "skiplist_cachedqdcatree_set.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -25,12 +25,12 @@ extern __thread ptst_t *ptst;
 
 #define DEBUG_PRINT(x)
 //printf x
-#define SLCATREE_MAX_CONTENTION_STATISTICS 1000
-#define SLCATREE_MIN_CONTENTION_STATISTICS -1000
-#define SLCATREE_LOCK_SUCCESS_STATS_CONTRIB -1
-#define SLCATREE_LOCK_FAILURE_STATS_CONTRIB 250
-#define SLCATREE_STACK_NEED 50
-#define SLCATREE_FREE_LIST_SIZE 4096
+#define CSLCATREE_MAX_CONTENTION_STATISTICS 1000
+#define CSLCATREE_MIN_CONTENTION_STATISTICS -1000
+#define CSLCATREE_LOCK_SUCCESS_STATS_CONTRIB -1
+#define CSLCATREE_LOCK_FAILURE_STATS_CONTRIB 250
+#define CSLCATREE_STACK_NEED 50
+#define CSLCATREE_FREE_LIST_SIZE 4096
 
 #ifndef LL_LOCK_TYPE
 #define   LL_LOCK_TYPE QDLock
@@ -66,29 +66,31 @@ typedef struct {
     CATreeBaseOrRouteNodeContainer baseOrRoute;
 } CATreeBaseOrRouteNode;
 
-typedef struct sl_catree_set {
+typedef struct csl_catree_set {
     //DRMCSLock globalLock;
     char pad1[CACHE_LINE_SIZE*2];    
     CATreeBaseOrRouteNode * root;
     char pad2[CACHE_LINE_SIZE*2];
-    int gc_allocator;
-    char pad3[CACHE_LINE_SIZE*2];
-} SLCATreeSet;
+    QDLock delete_min_lock;
+    TATASLock freeingFreeListLock;
+    volatile atomic_intptr_t freeList[CSLCATREE_FREE_LIST_SIZE];
+    LLPaddedULong freeListIndexCounter;
+} CSLCATreeSet;
 
 #define SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE 64
 typedef struct {
     char pad1[128];
-    SLCATreeSet * set;
+    CSLCATreeSet * set;
     CATreeBaseOrRouteNode * current_help_node;
     CATreeBaseOrRouteNode * last_locked_node;
     CATreeBaseOrRouteNode * last_locked_node_parent;
     int flush_stack_pos;
     CATreeBaseOrRouteNode * flush_stack[SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE];
     char pad2[128 - (4*sizeof(CATreeBaseOrRouteNode *))];
-} help_info_type;
+} chelp_info_type;
 
 _Alignas(CACHE_LINE_SIZE)
-__thread help_info_type help_info = {.flush_stack_pos = 0};
+__thread chelp_info_type chelp_info = {.flush_stack_pos = 0};
 /*
  * ==================
  * Internal functions
@@ -107,13 +109,13 @@ void catree_lock(CATreeLock * lock){
     if(LL_try_lock(&lock->lock)){
         /* lock->validation++; */
         /* assert(lock->validation == 1); */
-        lock->statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
+        lock->statistics += CSLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
         return;
     }
     LL_lock(&lock->lock);
     /* lock->validation++; */
     /* assert(lock->validation == 1); */
-    lock->statistics += SLCATREE_LOCK_FAILURE_STATS_CONTRIB;
+    lock->statistics += CSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
 }
 
 static inline
@@ -154,7 +156,7 @@ void catree_unlock(CATreeLock * lock){
 
 static inline
 CATreeBaseOrRouteNode * allocate_base_node(Skiplist * root){
-    CATreeBaseOrRouteNode * newBase = gc_alloc(ptst, gc_id);//SLCATREE_MALLOC(sizeof(CATreeBaseOrRouteNode));
+    CATreeBaseOrRouteNode * newBase = gc_alloc(ptst, gc_id);
     newBase->isBaseNode = true;
     catree_lock_init(&newBase->baseOrRoute.base.lock);
     newBase->baseOrRoute.base.root = root;
@@ -166,8 +168,7 @@ static inline
 CATreeBaseOrRouteNode * allocate_route_node(unsigned long key,
                                             CATreeBaseOrRouteNode * newBaseLeft,
                                             CATreeBaseOrRouteNode * newBaseRight){
-    CATreeBaseOrRouteNode * newRoute = gc_alloc(ptst, gc_id); 
-    //SLCATREE_MALLOC(sizeof(CATreeBaseOrRouteNode));
+    CATreeBaseOrRouteNode * newRoute = gc_alloc(ptst, gc_id);
     newRoute->isBaseNode = false;
     LL_initialize(&newRoute->baseOrRoute.route.lock);
     newRoute->baseOrRoute.route.valid = true;
@@ -180,18 +181,18 @@ CATreeBaseOrRouteNode * allocate_route_node(unsigned long key,
 
 
 
-/* static void enqueue_in_free_list(SLCATreeSet * set, CATreeBaseOrRouteNode * toEnqueue){ */
+/* static void enqueue_in_free_list(CSLCATreeSet * set, CATreeBaseOrRouteNode * toEnqueue){ */
 /*     while(true){ */
 /*         unsigned long slot = atomic_fetch_add(&set->freeListIndexCounter.value, 1); */
-/*         if(slot == SLCATREE_FREE_LIST_SIZE){ */
+/*         if(slot == CSLCATREE_FREE_LIST_SIZE){ */
 /*             // We are responsible for doing the freeing */
 /*             // Ensure that no one still is accessing old data */
-/*             CATreeBaseOrRouteNode * elementsToFree[SLCATREE_FREE_LIST_SIZE]; */
+/*             CATreeBaseOrRouteNode * elementsToFree[CSLCATREE_FREE_LIST_SIZE]; */
 /*             drmcs_runlock(&set->globalLock); */
 /*             drmcs_lock(&set->globalLock); */
 /*             drmcs_unlock(&set->globalLock); */
 /*             drmcs_rlock(&set->globalLock); */
-/*             for(int i = 0; i < SLCATREE_FREE_LIST_SIZE; i++){ */
+/*             for(int i = 0; i < CSLCATREE_FREE_LIST_SIZE; i++){ */
 /*                 CATreeBaseOrRouteNode * elementToFree; */
 /*                 while((elementToFree = (CATreeBaseOrRouteNode *)atomic_load(&set->freeList[i])) == NULL){ */
 /*                     thread_yield();//This should not happen */
@@ -203,22 +204,22 @@ CATreeBaseOrRouteNode * allocate_route_node(unsigned long key,
 /*             atomic_store_explicit(&set->freeList[0], (intptr_t)toEnqueue, memory_order_relaxed); */
 /*             //Let other threads start to enqueue */
 /*             atomic_store(&set->freeListIndexCounter.value, 1); */
-/*             for(int i = 0; i < SLCATREE_FREE_LIST_SIZE; i++){ */
+/*             for(int i = 0; i < CSLCATREE_FREE_LIST_SIZE; i++){ */
 /*                 CATreeBaseOrRouteNode * elementToFree = elementsToFree[i]; */
 /*                 if(elementToFree->isBaseNode){ */
 /*                     LL_destroy(&elementToFree->baseOrRoute.base.lock.lock); //Free deleted base */
-/*                     SLCATREE_FREE(elementToFree); */
+/*                     CSLCATREE_FREE(elementToFree); */
 /*                 }else{ */
 /*                     LL_destroy(&elementToFree->baseOrRoute.route.lock); //Free deleted route */
-/*                     SLCATREE_FREE(elementToFree);    */
+/*                     CSLCATREE_FREE(elementToFree);    */
 /*                 } */
 
 /*             } */
 /*             return; */
-/*         }else if (slot > SLCATREE_FREE_LIST_SIZE){ */
+/*         }else if (slot > CSLCATREE_FREE_LIST_SIZE){ */
 /*             //We need to wait then retry */
 /*             drmcs_runlock(&set->globalLock); */
-/*             while(atomic_load(&set->freeListIndexCounter.value) > SLCATREE_FREE_LIST_SIZE){ */
+/*             while(atomic_load(&set->freeListIndexCounter.value) > CSLCATREE_FREE_LIST_SIZE){ */
 /*                 thread_yield(); */
 /*             } */
 /*             drmcs_rlock(&set->globalLock); */
@@ -232,58 +233,52 @@ CATreeBaseOrRouteNode * allocate_route_node(unsigned long key,
 
 
 static inline
-void plain_slcatree_set_init(SLCATreeSet * set){
+void plain_cslcatree_set_init(CSLCATreeSet * set){
     //    drmcs_initialize(&set->globalLock);
-    //LL_initialize(&set->delete_min_lock);
     gc_id = gc_add_allocator(sizeof(CATreeBaseOrRouteNode));
     critical_enter();
     set->root = allocate_base_node(new_skiplist());
     critical_exit();
-    /* tatas_initialize(&set->freeingFreeListLock); */
-    /* for(int i = 0; i < SLCATREE_FREE_LIST_SIZE; i++){ */
-    /*     atomic_init(&set->freeList[i], (intptr_t)NULL); */
-    /* } */
-    /* atomic_init(&set->freeListIndexCounter.value, 0); */
-    //set->gc_allocator
-
 }
 
 
 static inline
-void slcatree_set_print_helper_helper(Skiplist * node){
-    printf("SL\n");
+void cslcatree_set_print_helper_helper(Skiplist * node){
+    printf("SL");
 }
 
 static inline
-void slcatree_set_print_helper(CATreeBaseOrRouteNode * root){
+void cslcatree_set_print_helper(CATreeBaseOrRouteNode * root){
     if(root->isBaseNode){
         printf("B(");
-        slcatree_set_print_helper_helper(root->baseOrRoute.base.root);
+        cslcatree_set_print_helper_helper(root->baseOrRoute.base.root);
         printf(")");
     }else{
         CATreeRouteNode * route = &root->baseOrRoute.route;
         printf("R(");
         printf("%lu", route->key);
         printf(",");
-        slcatree_set_print_helper(route->left);
+        printf("%p", root);
         printf(",");
-        slcatree_set_print_helper(route->right);
+        cslcatree_set_print_helper(route->left);
+        printf(",");
+        cslcatree_set_print_helper(route->right);
         printf(")");
     }
 }
 
 static inline
-void slcatree_set_print_helper_helper_dot(Skiplist * node){
+void cslcatree_set_print_helper_helper_dot(Skiplist * node){
     printf("SL\n");
 }
 
 static inline
-void slcatree_set_print_helper_dot(CATreeBaseOrRouteNode * root){
+void cslcatree_set_print_helper_dot(CATreeBaseOrRouteNode * root){
     if(root->isBaseNode){
         printf("B(\n");
         printf("digraph G{\n");
         printf("  graph [ordering=\"out\"];\n");
-        slcatree_set_print_helper_helper_dot(root->baseOrRoute.base.root);
+        cslcatree_set_print_helper_helper_dot(root->baseOrRoute.base.root);
         printf("}\n");
         printf("\n)");
     }else{
@@ -291,62 +286,62 @@ void slcatree_set_print_helper_dot(CATreeBaseOrRouteNode * root){
         printf("R(");
         printf("%lu", route->key);
         printf(",");
-        slcatree_set_print_helper_dot(route->left);
+        cslcatree_set_print_helper_dot(route->left);
         printf(",");
-        slcatree_set_print_helper_dot(route->right);
+        cslcatree_set_print_helper_dot(route->right);
         printf(")");
     }
 }
 
 
 static inline
-void slcatree_set_print(void * setParam){
-    SLCATreeSet * set = (SLCATreeSet *)setParam;
-    slcatree_set_print_helper(set->root);
-    printf("\n\nDOT:\n\n");
-    slcatree_set_print_helper_dot(set->root);
-    printf("\n\n");
+void cslcatree_set_print(void * setParam){
+    CSLCATreeSet * set = (CSLCATreeSet *)setParam;
+    cslcatree_set_print_helper(set->root);
+    printf("\n");
+    /* printf("\n\nDOT:\n\n"); */
+    /* cslcatree_set_print_helper_dot(set->root); */
+    /* printf("\n\n"); */
 }
 
 static inline
-void slcatree_set_free_helper(CATreeBaseOrRouteNode * root){
+void cslcatree_set_free_helper(CATreeBaseOrRouteNode * root){
     if(root->isBaseNode){
         skiplist_delete(root->baseOrRoute.base.root);
-        SLCATREE_FREE(root);
+        CSLCATREE_FREE(root);
     }else{
         CATreeRouteNode * route = &root->baseOrRoute.route;
-        slcatree_set_free_helper(route->left);
-        slcatree_set_free_helper(route->right);
+        cslcatree_set_free_helper(route->left);
+        cslcatree_set_free_helper(route->right);
         LL_destroy(&route->lock);
-        SLCATREE_FREE(root);
+        CSLCATREE_FREE(root);
     }
 }
 
 static inline
-void slcatree_set_destroy(void * setParam){
-    SLCATreeSet * set = (SLCATreeSet *)setParam;
-    /* for(int i = 0; i < SLCATREE_FREE_LIST_SIZE; i++){ */
-    /*     CATreeBaseOrRouteNode * elementToFree = (CATreeBaseOrRouteNode *)atomic_load(&set->freeList[i]); */
-    /*     if(elementToFree != NULL){ */
-    /*         if(elementToFree->isBaseNode){ */
-    /*             LL_destroy(&elementToFree->baseOrRoute.base.lock.lock); //Free deleted base */
-    /*             SLCATREE_FREE(elementToFree); */
-    /*         }else{ */
-    /*             LL_destroy(&elementToFree->baseOrRoute.route.lock); //Free deleted route */
-    /*             SLCATREE_FREE(elementToFree);    */
-    /*         } */
-    /*     } */
-    /* } */
-    slcatree_set_free_helper(set->root);
+void cslcatree_set_destroy(void * setParam){
+    CSLCATreeSet * set = (CSLCATreeSet *)setParam;
+    for(int i = 0; i < CSLCATREE_FREE_LIST_SIZE; i++){
+        CATreeBaseOrRouteNode * elementToFree = (CATreeBaseOrRouteNode *)atomic_load(&set->freeList[i]);
+        if(elementToFree != NULL){
+            if(elementToFree->isBaseNode){
+                LL_destroy(&elementToFree->baseOrRoute.base.lock.lock); //Free deleted base
+                CSLCATREE_FREE(elementToFree);
+            }else{
+                LL_destroy(&elementToFree->baseOrRoute.route.lock); //Free deleted route
+                CSLCATREE_FREE(elementToFree);   
+            }
+        }
+    }
+    cslcatree_set_free_helper(set->root);
 }
 
 static inline
 bool contention_reduce_split(CATreeBaseOrRouteNode *  baseNodeContainer,
                              void ** parent,
-                             SLCATreeSet * set,
+                             CSLCATreeSet * set,
                              CATreeBaseOrRouteNode *  parentNode) {
     CATreeBaseNode * node = &baseNodeContainer->baseOrRoute.base;
-
     if(!skiplist_more_than_two_keys(node->root)){
         node->lock.statistics = 0;
         return false;
@@ -370,7 +365,6 @@ bool contention_reduce_split(CATreeBaseOrRouteNode *  baseNodeContainer,
     DEBUG_PRINT(("split unlock %p\n", baseNodeContainer));
     catree_unlock(&node->lock);
     //Done!
-    //TODO Skip freeing
     //enqueue_in_free_list(set, baseNodeContainer);
     gc_free(ptst, baseNodeContainer, gc_id);
     return true;
@@ -405,7 +399,7 @@ static inline CATreeBaseOrRouteNode * find_rightmost_base_node(CATreeBaseOrRoute
 
 static inline CATreeBaseOrRouteNode * find_parent_of(CATreeBaseOrRouteNode * container,
                                                      unsigned long key,
-                                                     SLCATreeSet * set){
+                                                     CSLCATreeSet * set){
     if(set->root == container){
         return NULL;
     }
@@ -427,7 +421,8 @@ static inline CATreeBaseOrRouteNode * find_parent_of(CATreeBaseOrRouteNode * con
 static inline
 bool low_contention_join(CATreeBaseOrRouteNode *  baseNodeContainer,
                         CATreeBaseOrRouteNode * parentRoute,
-                        SLCATreeSet * set) {
+                        CSLCATreeSet * set) {
+
     CATreeBaseNode * node = &baseNodeContainer->baseOrRoute.base;
     if(parentRoute == NULL){
         node->lock.statistics = 0;
@@ -540,7 +535,7 @@ bool low_contention_join(CATreeBaseOrRouteNode *  baseNodeContainer,
     //enqueue_in_free_list(set, baseNodeContainer);
     //enqueue_in_free_list(set, neighbourBaseContainer);
     //enqueue_in_free_list(set, parentRoute);
-#ifdef SLCATREE_COUNT_ROUTE_NODES
+#ifdef CSLCATREE_COUNT_ROUTE_NODES
     int count = atomic_fetch_sub(&set->nrOfRouteNodes, 1);
     printf("%d\n", count);
 #endif
@@ -554,7 +549,7 @@ static inline
 CATreeBaseOrRouteNode *
 low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
                                      CATreeBaseOrRouteNode * parentRoute,
-                                     SLCATreeSet * set,
+                                     CSLCATreeSet * set,
                                      CATreeBaseOrRouteNode ** parentRouteWriteback) {
     //assert(0);
     CATreeBaseNode * node;
@@ -588,12 +583,12 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
     CATreeBaseOrRouteNode * newNeighbourBaseContainer = allocate_base_node(NULL);
     catree_lock(&newNeighbourBaseContainer->baseOrRoute.base.lock);
     CATreeBaseNode * newNeighbourBase = &newNeighbourBaseContainer->baseOrRoute.base;
-    if(SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE > help_info.flush_stack_pos){
-      //printf("L STACK POS %d\n", help_info.flush_stack_pos);
+    if(SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE > chelp_info.flush_stack_pos){
+      //printf("L STACK POS %d\n", chelp_info.flush_stack_pos);
       LL_open_delegation_queue(&newNeighbourBase->lock.lock);
-      help_info.flush_stack[help_info.flush_stack_pos] = newNeighbourBaseContainer;
+      chelp_info.flush_stack[chelp_info.flush_stack_pos] = newNeighbourBaseContainer;
     }
-    help_info.flush_stack_pos++;
+    chelp_info.flush_stack_pos++;
     /* if(neighbourBase->root == NULL){ */
     /*     newNeighbourBase->root = node->root; */
     /* }else if(node->root != NULL){ */
@@ -662,18 +657,17 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
     neighbourBase->valid = false;
     catree_unlock(&neighbourBase->lock);
     node->valid = false;
-    if(SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE < help_info.flush_stack_pos){
+    if(SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE < chelp_info.flush_stack_pos){
         DEBUG_PRINT(("force unlock node %p\n", baseNodeContainer));
         catree_unlock(&node->lock);
     }
-    //TODO SKIP FREEING!
     gc_free(ptst, baseNodeContainer, gc_id);
     gc_free(ptst, neighbourBaseContainer, gc_id);
     gc_free(ptst, parentRoute, gc_id);
     //enqueue_in_free_list(set, baseNodeContainer);
     //enqueue_in_free_list(set, neighbourBaseContainer);
     //enqueue_in_free_list(set, parentRoute);
-#ifdef SLCATREE_COUNT_ROUTE_NODES
+#ifdef CSLCATREE_COUNT_ROUTE_NODES
     int count = atomic_fetch_sub(&set->nrOfRouteNodes, 1);
     printf("%d\n", count);
 #endif
@@ -688,7 +682,7 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
 
 
 
-static inline void adaptAndUnlock(SLCATreeSet * set,
+static inline void adaptAndUnlock(CSLCATreeSet * set,
                                   CATreeBaseOrRouteNode * currentNode,
                                   CATreeBaseOrRouteNode * prevNode){
     CATreeBaseNode * node = &currentNode->baseOrRoute.base;
@@ -703,9 +697,9 @@ static inline void adaptAndUnlock(SLCATreeSet * set,
     }else{
         currentCATreeRouteNode = &prevNode->baseOrRoute.route;
     }
-    if(lock->statistics > SLCATREE_MAX_CONTENTION_STATISTICS){
+    if(lock->statistics > CSLCATREE_MAX_CONTENTION_STATISTICS){
         high_contention = true;
-    } else if(lock->statistics < SLCATREE_MIN_CONTENTION_STATISTICS){
+    } else if(lock->statistics < CSLCATREE_MIN_CONTENTION_STATISTICS){
         low_contention = true;
     }
     if(high_contention || low_contention){
@@ -746,291 +740,58 @@ typedef struct {
 } CATreeRoutingNodeStack;
 
 
-/* #define PUSH_NODE(Dtt, Tdt)                     \ */
-/*     ((Dtt)->array[(Dtt)->pos++] = Tdt) */
-
-/* static inline void push_node_dyn_array(CATreeRoutingNodeStack * stack, */
-/*                                        CATreeBaseOrRouteNode * node){ */
-/*     unsigned int i; */
-/*     if(stack->pos == stack->slot){ */
-/*         CATreeBaseOrRouteNode ** newArray = */
-/*             SLCATREE_MALLOC(sizeof(CATreeBaseOrRouteNode*) * (stack->slot*2)); */
-/*         for(i = 0; i < stack->pos; i++){ */
-/*             newArray[i] = stack->array[i]; */
-/*         } */
-/*         if(stack->slot > SLCATREE_STACK_NEED){ */
-/*             /\* Dynamically allocated array that needs to be deallocated *\/ */
-/*             SLCATREE_FREE(stack->array); */
-/*         } */
-/*         stack->array = newArray; */
-/*         stack->slot = stack->slot*2; */
-/*     } */
-/*     PUSH_NODE(stack, node); */
-/* } */
-
-/* #define POP_NODE(Dtt)			\ */
-/*      (((Dtt)->pos) ? 			\ */
-/*       (Dtt)->array[--((Dtt)->pos)] : NULL) */
-
-/* #define TOP_NODE(Dtt)                   \ */
-/*      (((Dtt)->pos) ?                             \ */
-/*       (Dtt)->array[(Dtt)->pos - 1] : NULL) */
-
-/* #define EMPTY_NODE(Dtt) (TOP_NODE(Dtt) == NULL) */
-
-/* static inline void init_stack(CATreeRoutingNodeStack *stack, */
-/*                               CATreeBaseOrRouteNode ** stack_array, */
-/*                               unsigned int init_slot) */
-/* { */
-/*     stack->array = stack_array; */
-/*     stack->pos = 0; */
-/*     stack->slot = init_slot; */
-/* } */
-
-
-
-/* #define DEC_ROUTE_NODE_STACK_AND_ARRAY(STACK_NAME) \ */
-/*     CATreeRoutingNodeStack STACK_NAME; \ */
-/*     CATreeRoutingNodeStack * STACK_NAME##_ptr = &(STACK_NAME); \ */
-/*     CATreeBaseOrRouteNode * STACK_NAME##_array[SLCATREE_STACK_NEED]; */
-
-/* #define DECLARE_AND_INIT_BASE_NODE_SEARCH_STACKS \ */
-/* DEC_ROUTE_NODE_STACK_AND_ARRAY(search_stack)  \ */
-/* DEC_ROUTE_NODE_STACK_AND_ARRAY(search_stack_copy) \ */
-/* DEC_ROUTE_NODE_STACK_AND_ARRAY(locked_base_nodes_stack) \ */
-/* init_stack(&search_stack, search_stack_array, 0); \ */
-/* init_stack(&search_stack_copy, search_stack_copy_array, 0); \ */
-/* init_stack(&locked_base_nodes_stack, locked_base_nodes_stack_array, SLCATREE_STACK_NEED);/\* Abuse as stack array size*\/ */
-
-/* static CATreeBaseOrRouteNode * */
-/* erl_db_catree_leftmost_base_node_and_path(CATreeBaseOrRouteNode * root, CATreeRoutingNodeStack * stack){ */
-/*     CATreeBaseOrRouteNode *  baseOrRoute = root; */
-/*     while(!baseOrRoute->isBaseNode){ */
-/*         PUSH_NODE(stack, baseOrRoute); */
-/*         baseOrRoute = baseOrRoute->baseOrRoute.route.left; */
-/*     } */
-/*     return baseOrRoute; */
-/* } */
-
-/* static inline CATreeBaseOrRouteNode * */
-/* get_next_base_node_and_path(CATreeBaseOrRouteNode * base_node, */
-/*                             CATreeRoutingNodeStack * stack) { */
-/*     if (EMPTY_NODE(stack)) { // The parent of b is the root */
-/*         return NULL; */
-/*     } else { */
-/*         if (TOP_NODE(stack)->baseOrRoute.route.left == base_node) { */
-/*             return erl_db_catree_leftmost_base_node_and_path( */
-/*                         TOP_NODE(stack)->baseOrRoute.route.right, */
-/*                         stack); */
-/*         } else { */
-/*             unsigned long pkey = TOP_NODE(stack)->baseOrRoute.route.key; */
-/*             POP_NODE(stack); */
-/*             while (!EMPTY_NODE(stack)) { */
-/*                 if(TOP_NODE(stack)->baseOrRoute.route.valid && pkey < TOP_NODE(stack)->baseOrRoute.route.key){ */
-/*                     return erl_db_catree_leftmost_base_node_and_path(TOP_NODE(stack)->baseOrRoute.route.right, stack); */
-/*                 } else { */
-/*                   POP_NODE(stack); */
-/*                 } */
-/*             } */
-/*         } */
-/*         return NULL; */
-/*     } */
-/* } */
-
-/* static inline void */
-/* clone_stack(CATreeRoutingNodeStack * search_stack_ptr, CATreeRoutingNodeStack * search_stack_copy_ptr){ */
-/*     unsigned int i; */
-/*     search_stack_copy_ptr->pos = search_stack_ptr->pos; */
-/*     for(i = 0; i < search_stack_ptr->pos; i++){ */
-/*         search_stack_copy_ptr->array[i] = search_stack_ptr->array[i]; */
-/*     } */
-/* } */
-
-/* static inline CATreeBaseNode * find_and_lock_next_base_node_and_path(CATreeRoutingNodeStack ** search_stack_ptr_ptr, */
-/*                                                                      CATreeRoutingNodeStack ** search_stack_copy_ptr_ptr, */
-/*                                                                      CATreeRoutingNodeStack * locked_base_nodes_stack_ptr, */
-/*                                                                      bool * is_contended) */
-/* { */
-/*     CATreeBaseOrRouteNode * current_node; */
-/*  find_next_try_again: */
-/*     current_node = TOP_NODE(locked_base_nodes_stack_ptr); */
-/*     CATreeBaseNode * base_node; */
-/*     CATreeRoutingNodeStack * tmp_stack_ptr; */
-/*     clone_stack(*search_stack_ptr_ptr,*search_stack_copy_ptr_ptr); */
-/*     current_node = */
-/*         get_next_base_node_and_path(current_node, *search_stack_ptr_ptr); */
-/*     if(current_node == NULL){ */
-/*         tmp_stack_ptr = *search_stack_ptr_ptr; */
-/*         *search_stack_ptr_ptr = *search_stack_copy_ptr_ptr; */
-/*         *search_stack_copy_ptr_ptr = tmp_stack_ptr; */
-/*         return NULL; */
-/*     } */
-/*     base_node = &current_node->baseOrRoute.base; */
-/*     *is_contended = catree_lock_is_contended(&base_node->lock); */
-/*     if( ! base_node->valid ){ */
-/*         /\* Retry *\/ */
-/*         catree_unlock(&base_node->lock); */
-/*         //TODO3 */
-/*         /\* drmcs_runlock(&set->globalLock); *\/ */
-/*         /\* drmcs_rlock(&set->globalLock); *\/ */
-/*         /\* Revere to previos state *\/ */
-/*         current_node = TOP_NODE(locked_base_nodes_stack_ptr); */
-/*         tmp_stack_ptr = *search_stack_ptr_ptr; */
-/*         *search_stack_ptr_ptr = *search_stack_copy_ptr_ptr; */
-/*         *search_stack_copy_ptr_ptr = tmp_stack_ptr; */
-/*         goto find_next_try_again; */
-/*     }else{ */
-/*         push_node_dyn_array(locked_base_nodes_stack_ptr, current_node); */
-/*     } */
-/*     return base_node; */
-/* } */
-/* #define ACCESS_ONCE(x) (*(volatile typeof(x) *)&(x)) */
-/* static inline void slcatree_set_print(void * setParam); */
-/* static inline CATreeBaseNode * lock_first_base_node(SLCATreeSet * set, */
-/*                                                     CATreeRoutingNodeStack * search_stack_ptr, */
-/*                                                     CATreeRoutingNodeStack * locked_base_nodes_stack_ptr, */
-/*                                                     bool * is_contended){ */
-/*     int retry; */
-/*     CATreeBaseOrRouteNode * current_node; */
-/*     CATreeRouteNode * current_route_node = NULL; */
-/*     CATreeBaseNode * base_node; */
-/*     int count = 10000000; */
-/*     do { */
-/*         count--; */
-/*         retry = 0; */
-/*         current_node = ACCESS_ONCE(set->root); */
-/*         current_route_node = NULL; */
-/*         while( ! current_node->isBaseNode ){ */
-/*             PUSH_NODE(search_stack_ptr, current_node); */
-/*             current_route_node = &current_node->baseOrRoute.route; */
-/*             current_node = current_route_node->left; */
-/*         } */
-/*         if(count == 0){ */
-/*             printf("STUCK AT %p %d parent %p\n", current_node, pthread_self(), TOP_NODE(search_stack_ptr)); */
-/*             printf("WELL COUNT REACHED FUCK!!!\n"); */
-/*             assert(0); */
-/*         } */
-/*         base_node = &current_node->baseOrRoute.base; */
-/*         *is_contended = catree_lock_is_contended(&base_node->lock); */
-/*         if( ! base_node->valid ){ */
-/*             /\* Retry *\/ */
-/*             catree_unlock(&base_node->lock); */
-/*             drmcs_runlock(&set->globalLock); */
-/*             drmcs_rlock(&set->globalLock); */
-/*             retry = 1; */
-/*             search_stack_ptr->pos = 0; */
-/*             search_stack_ptr->slot = 0; */
-/*         } */
-/*     } while(retry); */
-/*     push_node_dyn_array(locked_base_nodes_stack_ptr, current_node); */
-/*     return base_node; */
-/* } */
-
-
-/* static inline void */
-/* unlock_and_release_locked_base_node_stack(CATreeRoutingNodeStack * locked_base_nodes_stack_ptr, */
-/*                                           bool last_contended, */
-/*                                           CATreeBaseOrRouteNode * first_locked_parent, */
-/*                                           SLCATreeSet * set) */
-/* { */
-/*     CATreeBaseOrRouteNode * current_node; */
-/*     CATreeBaseNode * base_node; */
-/*     int i; */
-/*     if(locked_base_nodes_stack_ptr->pos == 1){ */
-/*         current_node = locked_base_nodes_stack_ptr->array[0]; */
-/*         base_node = &current_node->baseOrRoute.base; */
-/*         if(last_contended){ */
-/*             base_node->lock.statistics += SLCATREE_LOCK_FAILURE_STATS_CONTRIB; */
-/*         }else{ */
-/*             base_node->lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB; */
-/*         } */
-/*     }else{ */
-/*         for(i = locked_base_nodes_stack_ptr->pos -1; i >= 0 ; i--){ */
-
-/*             current_node = locked_base_nodes_stack_ptr->array[i]; */
-/*             base_node = &current_node->baseOrRoute.base; */
-/*             base_node->lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB; */
-/*             if(i != 0){ */
-/*                 catree_unlock(&base_node->lock); */
-/*             } */
-/*         } */
-/*     } */
-/*     if(locked_base_nodes_stack_ptr->pos >= 1){ */
-/*         adaptAndUnlock(set, */
-/*                        current_node, */
-/*                        first_locked_parent); */
-/*     } */
-/*     if(locked_base_nodes_stack_ptr->slot > SLCATREE_STACK_NEED){ */
-/*         SLCATREE_FREE(locked_base_nodes_stack_ptr->array); */
-/*     } */
-/* } */
-
-/* static inline */
-/* unsigned long slcatree_set_delete_min_opt(SLCATreeSet * set, unsigned long * key_write_back){ */
-/*     CATreeBaseNode * base_node; */
-/*     bool last_contended = false; */
-/*     DECLARE_AND_INIT_BASE_NODE_SEARCH_STACKS; */
-/*     /\* Find first base node *\/ */
-/*     base_node = lock_first_base_node(set, &search_stack, &locked_base_nodes_stack, &last_contended); */
-/*     CATreeBaseOrRouteNode * first_locked_parent = TOP_NODE(search_stack_ptr); */
-/*     /\* Find next base node until non-empyu base node is found *\/ */
-/*     while(base_node != NULL && skiplist_is_empty(base_node->root)){ */
-/*         base_node = find_and_lock_next_base_node_and_path(&search_stack_ptr, */
-/*                                                           &search_stack_copy_ptr, */
-/*                                                           locked_base_nodes_stack_ptr, */
-/*                                                           &last_contended); */
-/*     } */
-/*     /\* Get the return value *\/ */
-/*     if(base_node != NULL){ */
-/*         unsigned long result_value = skiplist_remove_min(base_node->root, key_write_back); */
-/*         unlock_and_release_locked_base_node_stack(locked_base_nodes_stack_ptr, */
-/*                                                   last_contended, */
-/*                                                   first_locked_parent, */
-/*                                                   set); */
-/*         return result_value; */
-/*     }else{ */
-/*         /\* Unlock base nodes and deinitialize search data *\/ */
-/*         unlock_and_release_locked_base_node_stack(locked_base_nodes_stack_ptr, */
-/*                                                   last_contended, */
-/*                                                   first_locked_parent, */
-/*                                                   set); */
-/*         *key_write_back = -1; */
-/*         return 0; */
-/*     } */
-/* } */
-
-static inline
-unsigned long perform_remove_min_with_lock(unsigned long * key_write_back){
-    while(help_info.last_locked_node_parent != NULL && skiplist_is_empty(help_info.last_locked_node->baseOrRoute.base.root)){
-        //Merge!
-        help_info.last_locked_node =
-            low_contention_join_force_left_child(help_info.last_locked_node,
-                                                 help_info.last_locked_node_parent,
-                                                 help_info.set,
-                                                 &help_info.last_locked_node_parent);
-    }
-    CATreeBaseNode * base_node = &help_info.last_locked_node->baseOrRoute.base;
-    unsigned long result_value = skiplist_remove_min(base_node->root, key_write_back);
-    return result_value;
-}
+#define REMOVE_MIN_CACHE_ARRAY_SIZE (256/8-2)
+#define REMOVE_MIN_CACHE_SIZE (REMOVE_MIN_CACHE_ARRAY_SIZE/2)
 
 typedef struct {
     char pad1[128];
-    volatile atomic_ulong value;
-    unsigned long key;
+    unsigned long key_value_array[REMOVE_MIN_CACHE_ARRAY_SIZE];
+    unsigned long size;
+    volatile atomic_ulong pos;
     char pad2[128];
-} delete_min_write_back_mem_type;
+} cdelete_min_write_back_mem_type;
 
-_Alignas(CACHE_LINE_SIZE)
-__thread delete_min_write_back_mem_type delete_min_write_back_mem = {.value = ATOMIC_VAR_INIT(((unsigned long)-1))};
+_Alignas(128)
+__thread cdelete_min_write_back_mem_type cdelete_min_write_back_mem = {.size = 0, .pos = ATOMIC_VAR_INIT(1)};
+
+static inline
+void perform_remove_min_with_lock(cdelete_min_write_back_mem_type * mem){
+    while(chelp_info.last_locked_node_parent != NULL && skiplist_is_empty(chelp_info.last_locked_node->baseOrRoute.base.root)){
+        //Merge!
+        chelp_info.last_locked_node =
+            low_contention_join_force_left_child(chelp_info.last_locked_node,
+                                                 chelp_info.last_locked_node_parent,
+                                                 chelp_info.set,
+                                                 &chelp_info.last_locked_node_parent);
+    }
+    CATreeBaseNode * base_node = &chelp_info.last_locked_node->baseOrRoute.base;
+    unsigned long key_value;
+    unsigned long result_value = skiplist_remove_min(base_node->root, &key_value);
+    unsigned long pos = 1;
+    mem->key_value_array[0] = key_value;
+    mem->key_value_array[1] = result_value;
+    //printf("INSERT TO CACHE POS: %lu KEY: %lu\n", 0, key_value);
+    while(key_value != ((unsigned long)-1) && pos < REMOVE_MIN_CACHE_SIZE){
+        result_value = skiplist_remove_min(base_node->root, &key_value);
+        if(key_value == ((unsigned long)-1)){
+            break;
+        }
+        //printf("INSERT TO CACHE POS: %lu KEY: %lu\n", pos, key_value);
+        mem->key_value_array[pos*2] = key_value;
+        mem->key_value_array[pos*2+1] = result_value;
+        pos++;
+    }
+    mem->size = pos;
+    atomic_store_explicit(&mem->pos, 0, memory_order_release);
+    //printf("CACHE SIZE %lu\n", pos);
+}
 
 
 static inline void delegate_perform_remove_min_with_lock(unsigned int msgSize, void * msgParam){
-    delete_min_write_back_mem_type * mem = *((delete_min_write_back_mem_type **)msgParam);
+    cdelete_min_write_back_mem_type * mem = *((cdelete_min_write_back_mem_type **)msgParam);
     //drmcs_rlock(&set->globalLock);
-    unsigned long value = perform_remove_min_with_lock(&mem->key);
-    atomic_store_explicit(&mem->value, value, memory_order_release);
-    help_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_FAILURE_STATS_CONTRIB;
+    perform_remove_min_with_lock(mem);
+    chelp_info.last_locked_node->baseOrRoute.base.lock.statistics += CSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
 }
 
 
@@ -1040,7 +801,204 @@ static inline void delegate_perform_remove_min_with_lock(unsigned int msgSize, v
  *=================
  */
 
-unsigned long slqdcatree_remove_min(SLCATreeSet * set, unsigned long * key_write_back){
+
+#define MAX_PUT_RELAXATION 128
+
+typedef struct {
+    unsigned long key;
+    unsigned long value;
+} put_buffer_elem_type;
+
+typedef struct {
+    char pad1[120];
+    unsigned long current_index;
+    put_buffer_elem_type buffer[MAX_PUT_RELAXATION];
+    unsigned long message_preparation_puffer[MAX_PUT_RELAXATION*2];
+    char pad2[128];
+} put_buffer_type;
+
+_Alignas(128)
+__thread put_buffer_type put_buffer = {.current_index = 0};
+
+static inline void delegate_perform_put_with_lock(unsigned int msgSize, void * msgParam){
+    unsigned long * msg = msgParam;
+    unsigned long key = msg[0];
+    unsigned int nr_of_values = msgSize/sizeof(unsigned long) -1;
+    for(int i = 0; i< nr_of_values; i++){
+        skiplist_put(chelp_info.last_locked_node->baseOrRoute.base.root, key, msg[i + 1] );
+    }
+    chelp_info.last_locked_node->baseOrRoute.base.lock.statistics += CSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
+}
+
+// From https://rosettacode.org/wiki/Sorting_algorithms/Insertion_sort#C
+static inline void insertion_sort(put_buffer_elem_type *a, unsigned long n) {
+    for(unsigned long i = 1; i < n; ++i) {
+        put_buffer_elem_type tmp = a[i];
+        unsigned long j = i;
+        while(j > 0 && tmp.key < a[j - 1].key) {
+            a[j] = a[j - 1];
+            --j;
+        }
+        a[j] = tmp;
+    }
+}
+static inline sort_put_buffer(){
+    insertion_sort(&put_buffer.buffer, put_buffer.current_index);
+}
+
+void cslqdcatree_put_flush(CSLCATreeSet * set){
+    unsigned long put_buffer_size = put_buffer.current_index;
+    if(put_buffer.current_index == 0){
+        //printf("put buffer size %lu\n", 0);
+        return;
+    }
+    //printf("put buffer size %lu\n", put_buffer_size);
+    sort_put_buffer();
+    critical_enter();
+    unsigned long current_pos = 0;
+    while(current_pos < put_buffer_size){
+        //Group together all elements with the same key
+        int items_in_message_buffer = 1;
+        unsigned long key = put_buffer.buffer[current_pos].key;
+        put_buffer.message_preparation_puffer[0] = key;
+        put_buffer.message_preparation_puffer[1] = put_buffer.buffer[current_pos].value;
+        unsigned long current_pos_tmp = current_pos + 1;
+        while(current_pos_tmp < put_buffer_size && key == put_buffer.buffer[current_pos_tmp].key){
+            put_buffer.message_preparation_puffer[items_in_message_buffer+1] = put_buffer.buffer[current_pos_tmp].value;
+            items_in_message_buffer = items_in_message_buffer + 1;
+            current_pos_tmp = current_pos_tmp + 1; 
+        }
+        //Find base node
+        CATreeBaseOrRouteNode * currentNode;
+    insert_opt_start:
+        currentNode = set->root;
+        CATreeBaseOrRouteNode * prevNode = NULL;
+        CATreeRouteNode * currentCATreeRouteNode = NULL;
+        int pathLength = 0;
+        while(!currentNode->isBaseNode){
+            currentCATreeRouteNode = &currentNode->baseOrRoute.route;
+            unsigned long nodeKey = currentCATreeRouteNode->key;
+            prevNode = currentNode;
+            if(key < nodeKey) {
+                currentNode = currentCATreeRouteNode->left;
+            } else {
+                currentNode = currentCATreeRouteNode->right;
+            }
+            pathLength++;
+        }
+
+        //Lock and handle contention
+        CATreeBaseNode * node = &currentNode->baseOrRoute.base;
+        CATreeLock * lock = &node->lock;
+        DEBUG_PRINT(("put lock %p\n", currentNode));
+        //catree_lock(lock);
+        bool contended;
+        void * buff = LL_delegate_or_lock_keep_closed(&node->lock.lock, (1+items_in_message_buffer)*sizeof(unsigned long), &contended);
+        if(buff == NULL){
+            // Got the lock
+            if(!node->valid){
+                //Retry
+                DEBUG_PRINT(("put  invalid unlock %p\n", currentNode));
+                catree_unlock(lock);
+                //drmcs_runlock(&set->globalLock);
+                //drmcs_rlock(&set->globalLock);
+                goto insert_opt_start;
+            }
+        }else{
+            //Successfully delegated the operation.
+            memcpy(buff, put_buffer.message_preparation_puffer, (1+items_in_message_buffer)*sizeof(unsigned long));
+            LL_close_delegate_buffer(&node->lock.lock,
+                                     buff,
+                                     delegate_perform_put_with_lock);
+            current_pos = current_pos_tmp;
+            continue;
+        }
+        if(contended){
+            //printf("P STACK POS %d\n", chelp_info.flush_stack_pos);
+            //fflush(stdout);
+            LL_open_delegation_queue(&node->lock.lock);
+            chelp_info.flush_stack[chelp_info.flush_stack_pos] = currentNode;
+            chelp_info.flush_stack_pos++;
+        }else{
+            chelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
+        }
+        chelp_info.set = set;
+        chelp_info.current_help_node = currentNode;
+        chelp_info.last_locked_node = currentNode;
+        chelp_info.last_locked_node_parent = prevNode;
+        skiplist_put(node->root, put_buffer.buffer[current_pos].key, put_buffer.buffer[current_pos].value);
+        //printf("CONCRETE PUT first %lu\n", put_buffer.buffer[current_pos].key);
+        current_pos = current_pos +1;
+        unsigned long max_key = skiplist_max_key(node->root);
+        while(current_pos < put_buffer_size && put_buffer.buffer[current_pos].key <= max_key){
+            skiplist_put(node->root, put_buffer.buffer[current_pos].key, put_buffer.buffer[current_pos].value);
+            //printf("CONCRETE PUT %lu\n", put_buffer.buffer[current_pos].key);
+            current_pos = current_pos +1;
+        }
+        if(contended){
+            chelp_info.last_locked_node->baseOrRoute.base.lock.statistics += CSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
+            int current_stack_pos = 0;
+            while(current_stack_pos < SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE &&
+                  current_stack_pos < chelp_info.flush_stack_pos){
+                //printf("PF STACK POS %d\n", current_stack_pos);
+                CATreeBaseNode * n =&chelp_info.flush_stack[current_stack_pos]->baseOrRoute.base;
+                LL_flush_delegation_queue(&n->lock.lock);
+                current_stack_pos++;
+                if(current_stack_pos<chelp_info.flush_stack_pos){
+                    DEBUG_PRINT(("not same as last node min unlock %p\n", current_node));
+                    LL_unlock(&n->lock.lock);
+                }
+            }
+        }else{
+            chelp_info.last_locked_node->baseOrRoute.base.lock.statistics += CSLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
+        }
+        /* if(chelp_info.last_locked_node != chelp_info.current_help_node){ */
+        /*     DEBUG_PRINT(("not same as last node min unlock %p\n", currentNode)); */
+        /*     LL_unlock(&node->lock.lock); */
+        /* } */
+        chelp_info.flush_stack_pos = 0;    
+        adaptAndUnlock(set,
+                       chelp_info.last_locked_node,
+                       chelp_info.last_locked_node_parent);
+        continue;
+    }
+    put_buffer.current_index = 0;
+    critical_exit();
+}
+
+
+void cslqdcatree_put(CSLCATreeSet * set,
+                    unsigned long key,
+                    unsigned long value){
+    put_buffer.buffer[put_buffer.current_index].key = key;
+    put_buffer.buffer[put_buffer.current_index].value = value;
+    put_buffer.current_index++;
+    //printf("put  %lu %lu\n", key, value);
+    if(put_buffer.current_index == MAX_PUT_RELAXATION){
+        cslqdcatree_put_flush(set);
+    }
+    return;
+
+
+}
+
+
+unsigned long cslqdcatree_remove_min(CSLCATreeSet * set, unsigned long * key_write_back){
+    //printf("REMOVE MIN TO HAPPEN\n");
+    cslqdcatree_put_flush(set);
+    //Try to find the node in the cache first
+    unsigned long pos = atomic_load_explicit(&cdelete_min_write_back_mem.pos, memory_order_relaxed);
+    unsigned long cache_size = cdelete_min_write_back_mem.size;
+    if(pos < cache_size){
+        unsigned long key = cdelete_min_write_back_mem.key_value_array[pos*2];
+        unsigned long value = cdelete_min_write_back_mem.key_value_array[pos*2+1];
+        atomic_store_explicit(&cdelete_min_write_back_mem.pos, pos + 1, memory_order_relaxed);
+        //printf("REMOVE FROM CACHE: %lu pos: %lu\n", key, pos);
+        *key_write_back = key;
+        //printf("remove (cached) key %lu\n", key);
+        return value;
+    }
+    critical_enter();
     //Find leftmost routing node
     int retry;
     CATreeBaseOrRouteNode * current_node;
@@ -1048,7 +1006,6 @@ unsigned long slqdcatree_remove_min(SLCATreeSet * set, unsigned long * key_write
     CATreeRouteNode * current_route_node = NULL;
     CATreeBaseNode * base_node;
     bool contended;
-    critical_enter();
     do {
         retry = 0;
         prev_node = NULL;
@@ -1061,7 +1018,7 @@ unsigned long slqdcatree_remove_min(SLCATreeSet * set, unsigned long * key_write
         }
         base_node = &current_node->baseOrRoute.base;
         DEBUG_PRINT(("remove min lock %p\n", current_node));
-        void * buff = LL_delegate_or_lock_keep_closed(&base_node->lock.lock, sizeof(delete_min_write_back_mem_type*), &contended);
+        void * buff = LL_delegate_or_lock_keep_closed(&base_node->lock.lock, sizeof(cdelete_min_write_back_mem_type*), &contended);
         if(buff == NULL){
             // Got the lock
             if( ! base_node->valid ){
@@ -1075,203 +1032,105 @@ unsigned long slqdcatree_remove_min(SLCATreeSet * set, unsigned long * key_write
         }else{
             //Successfully delegated the operation.
             //Write it to the queue
-            *(delete_min_write_back_mem_type **)buff = &delete_min_write_back_mem;
+            *(cdelete_min_write_back_mem_type **)buff = &cdelete_min_write_back_mem;
             LL_close_delegate_buffer(&base_node->lock.lock,
                                      buff,
                                      delegate_perform_remove_min_with_lock);
-            unsigned long val;
-            while(((unsigned long)-1) ==
-                  (val = atomic_load_explicit(&delete_min_write_back_mem.value,  memory_order_acquire))){
+            while(0 != atomic_load_explicit(&cdelete_min_write_back_mem.pos,  memory_order_acquire)){
                 // Spin wait
                 asm("pause");
             }
-            *key_write_back = delete_min_write_back_mem.key;
-            atomic_store_explicit(&delete_min_write_back_mem.value, -1, memory_order_relaxed);
+            unsigned long key = cdelete_min_write_back_mem.key_value_array[0];
+            unsigned long value = cdelete_min_write_back_mem.key_value_array[1];
+            atomic_store_explicit(&cdelete_min_write_back_mem.pos, 1, memory_order_relaxed);
+            *key_write_back = key;
             critical_exit();
-            return val;
+            return value;
         }
     } while(retry);
     if(contended){
-      //printf("R STACK POS %d\n", help_info.flush_stack_pos);
+      //printf("R STACK POS %d\n", chelp_info.flush_stack_pos);
       LL_open_delegation_queue(&base_node->lock.lock);
-      help_info.flush_stack[help_info.flush_stack_pos] = current_node;
-      help_info.flush_stack_pos++;
+      chelp_info.flush_stack[chelp_info.flush_stack_pos] = current_node;
+      chelp_info.flush_stack_pos++;
     }else{
       //printf("NOT CONT\n");
-      help_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
+      chelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
     }
-    help_info.set = set;
-    help_info.current_help_node = current_node;
-    help_info.last_locked_node = current_node;
-    help_info.last_locked_node_parent = prev_node; 
+    //printf("GL RM %p %p %lu\n",prev_node,ACCESS_ONCE(set->root), pthread_self());
+    chelp_info.set = set;
+    chelp_info.current_help_node = current_node;
+    chelp_info.last_locked_node = current_node;
+    chelp_info.last_locked_node_parent = prev_node; 
     if(contended){
-      help_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_FAILURE_STATS_CONTRIB;
+      chelp_info.last_locked_node->baseOrRoute.base.lock.statistics += CSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
       int current_stack_pos = 0;
       while(current_stack_pos < SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE &&
-	    current_stack_pos < help_info.flush_stack_pos){
-	CATreeBaseNode * n =&help_info.flush_stack[current_stack_pos]->baseOrRoute.base;
+	    current_stack_pos < chelp_info.flush_stack_pos){
+	CATreeBaseNode * n =&chelp_info.flush_stack[current_stack_pos]->baseOrRoute.base;
 	LL_flush_delegation_queue(&n->lock.lock);
 	//printf("FR STACK POS %d\n", current_stack_pos);
 	current_stack_pos++;
-	if(current_stack_pos<help_info.flush_stack_pos){
+	if(current_stack_pos<chelp_info.flush_stack_pos){
 	  DEBUG_PRINT(("not same as last node min unlock %p\n", current_node));
 	  LL_unlock(&n->lock.lock);
 	}
       }
     }else{
-      help_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
+      chelp_info.last_locked_node->baseOrRoute.base.lock.statistics += CSLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
     }
-      /* if(help_info.last_locked_node != help_info.current_help_node){ */
+      /* if(chelp_info.last_locked_node != chelp_info.current_help_node){ */
       /*   DEBUG_PRINT(("not same as last node min unlock %p\n", current_node)); */
       /*   LL_unlock(&base_node->lock.lock); */
       /* } */
-    help_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
-    unsigned long return_val = perform_remove_min_with_lock(key_write_back);
-    help_info.flush_stack_pos = 0;
+    chelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
+    perform_remove_min_with_lock(&cdelete_min_write_back_mem);
+    //Read the first from the cache
+    unsigned long key = cdelete_min_write_back_mem.key_value_array[0];
+    unsigned long value = cdelete_min_write_back_mem.key_value_array[1];
+    //printf("remove  key %lu\n", key);
+    //printf("REMOVE FROM CACHE AFTER FILL: %lu pos: %lu\n", key, 0);
+    atomic_store_explicit(&cdelete_min_write_back_mem.pos, 1, memory_order_relaxed);
+    *key_write_back = key;
+    chelp_info.flush_stack_pos = 0;
+    //printf("RL RM %lu \n", pthread_self());
     adaptAndUnlock(set,
-                   help_info.last_locked_node,
-                   help_info.last_locked_node_parent);
+                   chelp_info.last_locked_node,
+                   chelp_info.last_locked_node_parent);
+
     critical_exit();
-    return return_val;
+    return value;
 }
 
-typedef struct {
-    unsigned long key;
-    unsigned long value;
-} put_message;
-
-static inline void delegate_perform_put_with_lock(unsigned int msgSize, void * msgParam){
-    put_message * msg = msgParam;
-    skiplist_put(help_info.last_locked_node->baseOrRoute.base.root, msg->key, msg->value);
-    help_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_FAILURE_STATS_CONTRIB;
-}
-
-void slqdcatree_put(SLCATreeSet * set,
-                    unsigned long key,
-                    unsigned long value){
-    critical_enter();
-    //Find base node
-    CATreeBaseOrRouteNode * currentNode;
- insert_opt_start:
-    currentNode = set->root;
-    CATreeBaseOrRouteNode * prevNode = NULL;
-    CATreeRouteNode * currentCATreeRouteNode = NULL;
-    int pathLength = 0;
-    while(!currentNode->isBaseNode){
-        currentCATreeRouteNode = &currentNode->baseOrRoute.route;
-        unsigned long nodeKey = currentCATreeRouteNode->key;
-        prevNode = currentNode;
-        if(key < nodeKey) {
-            currentNode = currentCATreeRouteNode->left;
-        } else {
-            currentNode = currentCATreeRouteNode->right;
-        }
-        pathLength++;
-    }
-
-    //Lock and handle contention
-    CATreeBaseNode * node = &currentNode->baseOrRoute.base;
-    CATreeLock * lock = &node->lock;
-    DEBUG_PRINT(("put lock %p\n", currentNode));
-    //catree_lock(lock);
-    bool contended;
-    void * buff = LL_delegate_or_lock_keep_closed(&node->lock.lock, sizeof(put_message), &contended);
-    if(buff == NULL){
-        // Got the lock
-        if(!node->valid){
-            //Retry
-            DEBUG_PRINT(("put  invalid unlock %p\n", currentNode));
-            catree_unlock(lock);
-            //drmcs_runlock(&set->globalLock);
-            //drmcs_rlock(&set->globalLock);
-            goto insert_opt_start;
-        }
-    }else{
-        //Successfully delegated the operation.
-        put_message msg;
-        msg.key = key;
-        msg.value = value;
-        memcpy(buff, &msg, sizeof(put_message));
-        LL_close_delegate_buffer(&node->lock.lock,
-                                 buff,
-                                 delegate_perform_put_with_lock);
-        critical_exit();
-        return;
-    }
-    if(contended){
-      //printf("P STACK POS %d\n", help_info.flush_stack_pos);
-      //fflush(stdout);
-      LL_open_delegation_queue(&node->lock.lock);
-      help_info.flush_stack[help_info.flush_stack_pos] = currentNode;
-      help_info.flush_stack_pos++;
-    }else{
-      help_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
-    }
-    help_info.set = set;
-    help_info.current_help_node = currentNode;
-    help_info.last_locked_node = currentNode;
-    help_info.last_locked_node_parent = prevNode;
-    skiplist_put(node->root, key, value);
-
-    if(contended){
-      help_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_FAILURE_STATS_CONTRIB;
-      int current_stack_pos = 0;
-      while(current_stack_pos < SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE &&
-	    current_stack_pos < help_info.flush_stack_pos){
-	//printf("PF STACK POS %d\n", current_stack_pos);
-	CATreeBaseNode * n =&help_info.flush_stack[current_stack_pos]->baseOrRoute.base;
-	LL_flush_delegation_queue(&n->lock.lock);
-	current_stack_pos++;
-	if(current_stack_pos<help_info.flush_stack_pos){
-	  DEBUG_PRINT(("not same as last node min unlock %p\n", current_node));
-	  LL_unlock(&n->lock.lock);
-	}
-      }
-    }else{
-      help_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
-    }
-    /* if(help_info.last_locked_node != help_info.current_help_node){ */
-    /*     DEBUG_PRINT(("not same as last node min unlock %p\n", currentNode)); */
-    /*     LL_unlock(&node->lock.lock); */
-    /* } */
-    help_info.flush_stack_pos = 0;    
-    adaptAndUnlock(set,
-                   help_info.last_locked_node,
-                   help_info.last_locked_node_parent);
-    critical_exit();
-    return;
+void cslqdcatree_delete(CSLCATreeSet * setParam){
+    cslcatree_set_destroy(setParam);
+    CSLCATREE_FREE(setParam);
 }
 
 
-void slqdcatree_delete(SLCATreeSet * setParam){
-    slcatree_set_destroy(setParam);
-    SLCATREE_FREE(setParam);
-}
-
-
-SLCATreeSet * slqdcatree_new(){
-    SLCATreeSet * set = SLCATREE_MALLOC(sizeof(SLCATreeSet));
-    plain_slcatree_set_init(set);
+CSLCATreeSet * cslqdcatree_new(){
+    CSLCATreeSet * set = CSLCATREE_MALLOC(sizeof(CSLCATreeSet));
+    plain_cslcatree_set_init(set);
     return set;
 }
 
 /* int main(){ */
 /*     printf("THIS IS A TEST FUNCTION 2\n"); */
-/*     SLCATreeSet * l =  slcatree_new(); */
+/*     CSLCATreeSet * l =  cslcatree_new(); */
 /*     for(unsigned long val = 0; val < 20; val++){ */
-/*         slcatree_put(l, val, val); */
+/*         cslcatree_put(l, val, val); */
 /*         printf("INSERTED %ul\n", val); */
 /*     } */
 
 /*     for(unsigned long val = 0; val < 20; val++){ */
-/*         slcatree_put(l, val, val); */
+/*         cslcatree_put(l, val, val); */
 /*         printf("INSERTED %ul\n", val); */
 /*     } */
 
 /*     for(int i = 0; i < 41; i++){ */
 /*         unsigned long key = 44; */
-/*         unsigned long val = slcatree_remove_min(l, &key); */
+/*         unsigned long val = cslcatree_remove_min(l, &key); */
 /*         printf("RETURNED %ul %ul\n", val, key); */
 /*     }     */
-/*     slcatree_delete(l); */
+/*     cslcatree_delete(l); */
 /* } */

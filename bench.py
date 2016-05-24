@@ -20,6 +20,7 @@ ALGORITHMS = [ 'cheap'
              , 'skip'
              , 'slsm'
              , 'spray'
+             , 'qdcatree'
              ]
 
 NELEMS = [ 50000, 66666, 100000, 131072, 500000, 524288

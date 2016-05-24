@@ -1,9 +1,9 @@
 #ifndef SLCATREE_SET_H
 #define SLCATREE_SET_H
 
-#include "ssalloc.h"
-#define SLCATREE_MALLOC(size) ssalloc_alloc(1, size);
-#define SLCATREE_FREE(data) ;
+/* #include "include/ssalloc.h" */
+/* #define SLCATREE_MALLOC(size) ssalloc_alloc(1, size); */
+/* #define SLCATREE_FREE(data) ; */
 
 #ifndef SLCATREE_MALLOC
 #      define SLCATREE_MALLOC(size) malloc(size)
@@ -21,5 +21,6 @@ void slqdcatree_put(SLCATreeSet * set,
 unsigned long slqdcatree_remove_min(SLCATreeSet * set, unsigned long * key_write_back);
 void slqdcatree_delete(SLCATreeSet * setParam);
 SLCATreeSet * slqdcatree_new();
+void slqdcatree_put_flush(SLCATreeSet * set);
 
 #endif

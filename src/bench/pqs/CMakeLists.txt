@@ -3,10 +3,10 @@ include_directories(
 )
 
 add_library(linden STATIC
-    ${CMAKE_SOURCE_DIR}/lib/linden/common.c
-    ${CMAKE_SOURCE_DIR}/lib/linden/prioq.c
-    ${CMAKE_SOURCE_DIR}/lib/linden/gc/gc.c
-    ${CMAKE_SOURCE_DIR}/lib/linden/gc/ptst.c
+    ${CMAKE_SOURCE_DIR}/lib/spraylist/linden_common.c
+    ${CMAKE_SOURCE_DIR}/lib/spraylist/linden.c
+    ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/gc.c
+    ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/ptst.c
     linden.cpp
 )
 execute_process(COMMAND getconf LEVEL1_DCACHE_LINESIZE OUTPUT_VARIABLE CACHE_LINE_SIZE)
@@ -15,6 +15,7 @@ set_target_properties(linden PROPERTIES COMPILE_FLAGS
 )
 target_include_directories(linden PUBLIC
     ${CMAKE_SOURCE_DIR}/lib
+    ${CMAKE_SOURCE_DIR}/lib/spraylist/include
 )
 
 add_library(sequence_heap STATIC
@@ -57,19 +58,21 @@ target_include_directories(spraylist PUBLIC
 
 
 add_library(qdcatree STATIC
-    ${CMAKE_SOURCE_DIR}/lib/spraylist/ssalloc.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_qdcatree_set.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/eseq_skiplist.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_cachedqdcatree_set.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/feseq_skiplist.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/qd_lock.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/tatas_lock.c
+    ${CMAKE_SOURCE_DIR}/lib/linden/gc/gc.c
+    ${CMAKE_SOURCE_DIR}/lib/linden/gc/ptst.c
     qdcatree.cpp
 )
 set_target_properties(qdcatree PROPERTIES COMPILE_FLAGS
-    "-w -std=gnu11"
+    "-w -std=gnu11 -DINTEL -DCACHE_LINE_SIZE=${CACHE_LINE_SIZE}"
 )
 target_include_directories(qdcatree PUBLIC
     ${CMAKE_SOURCE_DIR}/lib
     ${CMAKE_SOURCE_DIR}/lib/qdcatree
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc
-    ${CMAKE_SOURCE_DIR}/lib/spraylist/include
+    ${CMAKE_SOURCE_DIR}/lib/linden
 )

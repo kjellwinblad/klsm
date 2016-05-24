@@ -1,8 +1,8 @@
 #include "linden.h"
 
 extern "C" {
-#include "linden/gc/gc.h"
-#include "linden/prioq.h"
+#include "spraylist/gc/gc.h"
+#include "spraylist/linden.h"
 }
 
 namespace kpqbench
@@ -43,7 +43,7 @@ Linden::insert(const uint32_t &key,
 bool
 Linden::delete_min(uint32_t &v)
 {
-    v = deletemin(m_q->pq);
+    v = deletemin(m_q->pq, NULL);
     return true;
 }
 

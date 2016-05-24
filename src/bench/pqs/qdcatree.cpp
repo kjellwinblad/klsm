@@ -2,12 +2,12 @@
 
 extern "C" {
 #include "skiplist_qdcatree_set.h"
+#include "linden/gc/gc.h"
 }
 
 namespace kpqbench
 {
 
-static __thread bool initializedqd= false;
     
 struct qdcatree_t {
     char pad1[64 - sizeof(SLCATreeSet *)]; 
@@ -27,6 +27,7 @@ qdcatree_insert(SLCATreeSet *pq,
 
 QDCATree::QDCATree()
 {
+    _init_gc_subsystem();
     init_thread(1);
     m_q = new qdcatree_t;
     m_q->pq = slqdcatree_new();
@@ -40,10 +41,6 @@ QDCATree::~QDCATree()
 void
 QDCATree::init_thread(const size_t nthreads)
 {
-    if (!initializedqd) {
-        ssalloc_init();
-        initializedqd = true;
-    }
 }
     
 void

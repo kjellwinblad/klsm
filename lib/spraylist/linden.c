@@ -334,9 +334,9 @@ deletemin(pq_t *pq, thread_data_t *d)
     /* the marker is on the preceding pointer */
     /* linearisation point deletemin */
     nxt = __sync_fetch_and_or(&x->next[0], 1);
-    if (is_marked_ref(nxt)) {
-      d->nb_collisions++;
-    }
+    /* if (is_marked_ref(nxt)) { */
+    /*   d->nb_collisions++; */
+    /* } */
   }
   while ( (x = get_unmarked_ref(nxt)) && is_marked_ref(nxt) );
 

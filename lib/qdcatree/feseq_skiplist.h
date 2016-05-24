@@ -3,10 +3,9 @@
 
 #include <stdbool.h>
 
-#include "ssalloc.h"
-#define SKIPLIST_MALLOC(size) malloc(size)
-//ssalloc_alloc(1, size);
-#define SKIPLIST_FREE(data) free(data);
+//#include "include/ssalloc.h"
+/* #define SKIPLIST_MALLOC(size) ssalloc_alloc(1, size); */
+/* #define SKIPLIST_FREE(data) ; */
 
 #ifndef SKIPLIST_MALLOC
 #define SKIPLIST_MALLOC(size) malloc(size)
@@ -29,6 +28,7 @@ Skiplist * new_skiplist();
 void skiplist_delete(Skiplist * skiplist);
 bool skiplist_is_empty(Skiplist * skiplist);
 bool skiplist_more_than_two_keys(Skiplist * skiplist);
+unsigned long skiplist_max_key(Skiplist * skiplist);
 /* This function assumes that the input skiplist has at least two different keys */
 unsigned long skiplist_split(Skiplist * skiplist,
                              Skiplist ** left_writeback,
