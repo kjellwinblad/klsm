@@ -14,9 +14,10 @@ struct linden_t {
 
 static inline void
 linden_insert(pq_t *pq,
+              const uint32_t k,
               const uint32_t v)
 {
-    insert(pq, v, v);
+    insert(pq, k, v);
 }
 
 Linden::Linden(const int max_offset)
@@ -35,15 +36,16 @@ Linden::~Linden()
 
 void
 Linden::insert(const uint32_t &key,
-               const uint32_t & /* Unused */)
+               const uint32_t &value)
 {
-    linden_insert(m_q->pq, key);
+    linden_insert(m_q->pq, key, value);
 }
 
 bool
 Linden::delete_min(uint32_t &v)
 {
-    v = deletemin(m_q->pq, NULL);
+    unsigned long value;
+    v = deletemin(m_q->pq);
     return true;
 }
 

@@ -88,7 +88,7 @@ extern void pq_destroy(pq_t *pq);
 
 extern int insert(pq_t *pq, pkey_t k, pval_t v);
 
-extern pval_t deletemin(pq_t *pq, thread_data_t *d);
+extern pval_t deletemin(pq_t *pq);
 
 extern void sequential_length(pq_t *pq);
 

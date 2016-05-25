@@ -380,12 +380,13 @@ bench_thread(PriorityQueue *pq,
                              settings.size - thread_id * slice_size : slice_size;
     for (int i = 0; i < initial_size; i++) {
         uint32_t elem = keygen.next();
+        uint32_t value = keygen.next();
 #ifdef ENABLE_QUALITY
         VAL_TYPE v = { (uint32_t)thread_id, insertion_id++, rdtsc() };
         insertions->emplace_back(elem, v);
         pq->insert(elem, v);
 #else
-        pq->insert(elem, elem);
+        pq->insert(elem, value);
 #endif
     }
     fill_barrier.fetch_sub(1, std::memory_order_relaxed);
@@ -412,7 +413,7 @@ bench_thread(PriorityQueue *pq,
             insertions->emplace_back(k, v);
             pq->insert(k, v);
 #else
-            pq->insert(k, k);
+            pq->insert(k, keygen.next());
 #endif
             kpq::COUNTERS.inserts++;
         } else {
