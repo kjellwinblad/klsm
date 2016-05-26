@@ -139,6 +139,25 @@ dist_lsm_local<K, V, Rlx>::merge_insert(block<K, V> *const new_block,
 template <class K, class V, int Rlx>
 bool
 dist_lsm_local<K, V, Rlx>::delete_min(dist_lsm<K, V, Rlx> *parent,
+                                      K &key, V &val)
+{
+    typename block<K, V>::peek_t best = block<K, V>::peek_t::EMPTY();
+    peek(best);
+
+    if (best.m_item == nullptr && spy(parent) > 0) {
+        peek(best); /* Retry once after a successful spy(). */
+    }
+
+    if (best.m_item == nullptr) {
+        return false; /* We did our best, give up. */
+    }
+
+    return best.m_item->take(best.m_version, key, val);
+}
+
+template <class K, class V, int Rlx>
+bool
+dist_lsm_local<K, V, Rlx>::delete_min(dist_lsm<K, V, Rlx> *parent,
                                       V &val)
 {
     typename block<K, V>::peek_t best = block<K, V>::peek_t::EMPTY();

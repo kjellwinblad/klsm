@@ -82,6 +82,55 @@ k_lsm<K, V, Rlx>::insert(const K &key,
 
 template <class K, class V, int Rlx>
 bool
+k_lsm<K, V, Rlx>::delete_min(K &key, V &val)
+{
+    /* Load the best item from the local distributed lsm, and the (relaxed)
+     * best item from the global lsm, and return the best of both.
+     * If both are empty, perform spy on the distributed lsm and retry in
+     * case it succeeds.
+     *
+     * ---
+     *
+     * The changes required for this seem fairly simple: we need to add
+     * peek() to the public interface for both dist and shared lsm's, and
+     * additionally spy() for the dist lsm. There are no further problematic
+     * interactions between memory management here.
+     */
+
+    typename block<K, V>::peek_t
+            best_dist = block<K, V>::peek_t::EMPTY(),
+            best_shared = block<K, V>::peek_t::EMPTY();
+
+    do {
+        m_dist.find_min(best_dist);
+        m_shared.find_min(best_shared);
+
+        if (!best_dist.empty() && !best_shared.empty()) {
+            if (best_dist.m_key < best_shared.m_key) {
+                COUNT_INC(dlsm_deletes);
+                return best_dist.take(key, val);
+            } else {
+                COUNT_INC(slsm_deletes);
+                return best_shared.take(key, val);
+            }
+        }
+
+        if (!best_dist.empty() /* and best_shared is empty */) {
+            COUNT_INC(dlsm_deletes);
+            return best_dist.take(key, val);
+        }
+
+        if (!best_shared.empty() /* and best_dist is empty */) {
+            COUNT_INC(slsm_deletes);
+            return best_shared.take(key, val);
+        }
+    } while (m_dist.spy() > 0);
+
+    return false;
+}
+
+template <class K, class V, int Rlx>
+bool
 k_lsm<K, V, Rlx>::delete_min(V &val)
 {
     /* Load the best item from the local distributed lsm, and the (relaxed)

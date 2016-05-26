@@ -61,6 +61,7 @@ public:
 
     void insert(const K &key, const V &value);
     bool delete_min(V &value);
+    bool delete_min(K &key, V &value);
     void clear();
 
     void print() const;
@@ -108,6 +109,25 @@ GlobalLock<K, V>::delete_min(V &value)
     }
 
     value = m_array[0].value;
+    m_array[0] = m_array[m_length - 1];
+    bubble_down(0);
+    m_length--;
+
+    return true;
+}
+
+template <class K, class V>
+bool
+GlobalLock<K, V>::delete_min(K &key, V &value)
+{
+    std::lock_guard<std::mutex> g(m_mutex);
+
+    if (m_length == 0) {
+        return false;
+    }
+
+    value = m_array[0].value;
+    key = m_array[0].key;
     m_array[0] = m_array[m_length - 1];
     bubble_down(0);
     m_length--;
