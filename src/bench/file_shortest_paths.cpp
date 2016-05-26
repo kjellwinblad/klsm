@@ -38,13 +38,15 @@
 constexpr int DEFAULT_NTHREADS   = 1;
 constexpr int DEFAULT_RELAXATION = 256;
 constexpr int DEFAULT_SEED       = 0;
-constexpr size_t DEFAULT_RANDOM_WEIGHTS_END_RANGE = 100;
 static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 
 #define PQ_DLSM       "dlsm"
 #define PQ_GLOBALLOCK "globallock"
 #define PQ_KLSM       "klsm"
 #define PQ_MULTIQ     "multiq"
+
+/* Hack to support graphs that are badly formatted */
+#define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
 
 static hwloc_wrapper hwloc; /**< Thread pinning functionality. */
 
@@ -86,13 +88,12 @@ usage()
             "                      [-s seed] pq\n"
             "       -i: The input graph file\n"
             "       -n: Number of threads (default = %d)\n"
-            "       -w: Generate random weights between 0 and end_of_range (default = %lu)\n"
+            "       -w: Generate random weights between 0 and end_of_range\n"
             "       -s: The random number generator seed (default = %d)\n"
             "       -o: Output file name (default = %s)\n"
             "       pq: The data structure to use as the backing priority queue\n"
             "           (one of '%s', %s', '%s', '%s')\n",
             DEFAULT_NTHREADS,
-            DEFAULT_RANDOM_WEIGHTS_END_RANGE,
             DEFAULT_SEED,
             DEFAULT_OUTPUT_FILE.c_str(),
             PQ_DLSM, PQ_GLOBALLOCK, PQ_KLSM, PQ_MULTIQ);
@@ -103,7 +104,7 @@ static vertex_t *
 read_graph(std::string file_path,
            bool generate_weights,
            size_t generate_weights_range_end,
-           size_t & n,
+           size_t & number_of_nodes_write_back,
            int seed)
 {
     std::ifstream file;
@@ -116,11 +117,8 @@ read_graph(std::string file_path,
     size_t tmp_num2;
     std::string tmp_str;
     file >> tmp_str >> tmp_str >> tmp_num1 >> tmp_str >>  tmp_num2;    
-    if(tmp_num1 == 3072442){/*Hack for orkut graph that seems to be badly formatted*/
-        n = tmp_num1 + 200;
-    }else{
-        n = tmp_num1;
-    }
+    number_of_nodes_write_back = tmp_num1;
+    size_t n = tmp_num1;
     vertex_t *data = new vertex_t[n];
     size_t *current_edge_index = new size_t[n];
     for(size_t i = 0; i < n; i++){
@@ -131,11 +129,13 @@ read_graph(std::string file_path,
     for(size_t i = 0; i < n; i++){
         current_edge_index[i] = 0;
     }
-    int line = 0;
     while (!file.eof())
     {
         file >> tmp_num1 >> tmp_num2;
-        line++;
+#ifdef IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE
+        if (tmp_num1 >= n) continue;
+        if (tmp_num2 >= n) continue;
+#endif
         data[tmp_num1].num_edges++;
     }
     file.close();
@@ -151,11 +151,15 @@ read_graph(std::string file_path,
     while (!file.eof())
     {
         file >> tmp_num1 >> tmp_num2;
+#ifdef IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE
+        if (tmp_num1 >= n) continue;
+        if (tmp_num2 >= n) continue;
+#endif
         if(data[tmp_num1].edges == NULL){
             data[tmp_num1].edges = new edge_t[data[tmp_num1].num_edges];
         }
         data[tmp_num1].edges[current_edge_index[tmp_num1]].target = tmp_num2;
-        if(generate_weights){
+        if(!generate_weights){
             data[tmp_num1].edges[current_edge_index[tmp_num1]].weight = 1;
         }else{
             data[tmp_num1].edges[current_edge_index[tmp_num1]].weight = rnd_st(rng);;
@@ -343,7 +347,7 @@ bench(T *pq,
     clock_gettime(CLOCK_MONOTONIC, &end);
     /* End benchmark. */
 
-    verify_graph(graph, number_of_nodes);
+    //verify_graph(graph, number_of_nodes);
     print_graph(graph,
                 number_of_nodes,
                 settings.output_file);
@@ -360,7 +364,7 @@ main(int argc,
      char **argv)
 {
     int ret = 0;
-    struct settings s = { DEFAULT_NTHREADS, "", DEFAULT_SEED, DEFAULT_RANDOM_WEIGHTS_END_RANGE, DEFAULT_OUTPUT_FILE, PQ_DLSM};
+    struct settings s = { DEFAULT_NTHREADS, "", DEFAULT_SEED, 0, DEFAULT_OUTPUT_FILE, PQ_DLSM};
 
     int opt;
     while ((opt = getopt(argc, argv, "i:n:w:o:p:s:")) != -1) {
@@ -381,7 +385,7 @@ main(int argc,
             break;
         case 'w':
             errno = 0;
-            s.max_generated_random_weight = strtod(optarg, NULL);
+            s.max_generated_random_weight = strtol(optarg, NULL, 0);
             if (errno != 0) {
                 usage();
             }
