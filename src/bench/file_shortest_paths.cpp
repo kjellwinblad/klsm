@@ -126,7 +126,7 @@ read_graph(std::string file_path,
     std::ifstream file;
     file.open(file_path);
     if ( ! file.is_open()) {
-        std::cout << "Could not open file: " << file_path << std::endl;
+        std::cerr << "Could not open file: " << file_path << std::endl;
         std::exit(0);
     }
     size_t tmp_num1;
@@ -158,7 +158,7 @@ read_graph(std::string file_path,
     file.close();
     file.open(file_path);
     if ( ! file.is_open()) {
-        std::cout << "Could not open file: " << file_path << std::endl;
+        std::cerr << "Could not open file: " << file_path << std::endl;
         std::exit(0);
     }
     file >> tmp_str >> tmp_str >> tmp_num1 >> tmp_str >>  tmp_num2;
@@ -214,7 +214,7 @@ print_graph(const vertex_t *graph,
 {
     std::ofstream file(out_file);
     if (!file.is_open()){
-        std::cout << "Unable to open out file: " << out_file << std::endl;
+        std::cerr << "Unable to open out file: " << out_file << std::endl;
         std::exit(0);
     }
     for (size_t i = 0; i < n; i++) {
@@ -257,7 +257,7 @@ bench_thread(T *pq,
     //bool last_success = true;
     //int threads_waiting;
     //(threads_waiting = wt.threads_waiting_to_succeed.load(std::memory_order_relaxed)) < number_of_threads
-    std::cout << "Start\n";
+    std::cerr << "Start\n";
     //size_t max_dist = 0;
     while (true) {
         // if(!last_success && threads_waiting == 0){
@@ -278,7 +278,7 @@ bench_thread(T *pq,
                 std::this_thread::yield();
             }
             if(!success){
-                std::cout << "exit\n";
+                std::cerr << "exit\n";
                 //We give up... No work for us
                 break;
             }
@@ -302,7 +302,7 @@ bench_thread(T *pq,
         }
         if(record_processed){
             if(v->processed){
-                std::cout << "SHOULD NOT HAPPEN!!! " // << w_dist << " " << new_dist <<" "<<e->weight 
+                std::cerr << "SHOULD NOT HAPPEN!!! " // << w_dist << " " << new_dist <<" "<<e->weight 
                           << std::endl;
                 pq->signal_waste();
             }else{
