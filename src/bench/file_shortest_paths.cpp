@@ -248,7 +248,7 @@ bench_thread(T *pq,
              const int thread_id,
              vertex_t *graph)
 {
-    bool record_processed = true;
+    bool record_processed = false;
     hwloc.pin_to_core(thread_id);
     pq->init_thread(number_of_threads);
     while (!start_barrier.load(std::memory_order_relaxed)) {

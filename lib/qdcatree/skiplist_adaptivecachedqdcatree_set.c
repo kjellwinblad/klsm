@@ -738,27 +738,52 @@ typedef struct {
     unsigned int slot;         /* "Slot number" of top element or 0 if not set */
     CATreeBaseOrRouteNode** array; /* The stack */
 } CATreeRoutingNodeStack;
-#define MAX_RELAXATION (4095)
+#define MAX_RELAXATION (4096)
 
-#define REMOVE_MIN_CACHE_SIZE (MAX_RELAXATION+1)
+#define REMOVE_MIN_CACHE_SIZE (MAX_RELAXATION)
 #define REMOVE_MIN_CACHE_ARRAY_SIZE (REMOVE_MIN_CACHE_SIZE*2)
+
+typedef struct {
+    unsigned long key;
+    unsigned long value;
+} pq_elem_type;
 
 
 typedef struct {
-    char pad1[128 - (3*sizeof(unsigned int))];
+    char pad1[128];
     unsigned int current_relaxation;
-    unsigned int current_nr_of_no_waste;    
+    /*unsigned int current_nr_of_no_waste;*/
+    unsigned long current_put_cache_min_key;
+    unsigned long current_remove_min_cache_max_key;
     volatile atomic_uint pos;
     unsigned int size;
-    unsigned long key_value_array[REMOVE_MIN_CACHE_ARRAY_SIZE];
+    pq_elem_type key_value_array[REMOVE_MIN_CACHE_SIZE];
     char pad2[128];
 } acdelete_min_write_back_mem_type;
 
 _Alignas(128)
 __thread acdelete_min_write_back_mem_type acdelete_min_write_back_mem = {
     .current_relaxation = 0,
-    .current_nr_of_no_waste = 0,
+    .current_put_cache_min_key = (unsigned long)-1,
+    /* .current_nr_of_no_waste = 0, */
     .size = 0, .pos = ATOMIC_VAR_INIT(1)};
+
+
+#define MAX_PUT_RELAXATION MAX_RELAXATION
+
+
+
+typedef struct {
+    char pad1[120];
+    unsigned int current_index;
+    pq_elem_type buffer[MAX_PUT_RELAXATION];
+    unsigned long message_preparation_puffer[MAX_PUT_RELAXATION*2];
+    char pad2[128];
+} aput_buffer_type;
+
+_Alignas(128)
+__thread aput_buffer_type aput_buffer = {.current_index = 0};
+
 
 static inline
 void perform_remove_min_with_lock(acdelete_min_write_back_mem_type * mem){
@@ -774,18 +799,43 @@ void perform_remove_min_with_lock(acdelete_min_write_back_mem_type * mem){
     unsigned long key_value;
     unsigned long result_value = skiplist_remove_min(base_node->root, &key_value);
     unsigned long pos = 1;
-    mem->key_value_array[0] = key_value;
-    mem->key_value_array[1] = result_value;
+    mem->key_value_array[0].key = key_value;
+    mem->key_value_array[0].value = result_value;
     //printf("INSERT TO CACHE POS: %lu KEY: %lu\n", 0, key_value);
-    while(key_value != ((unsigned long)-1) && pos < (mem->current_relaxation + 1)){
+    while(key_value != ((unsigned long)-1) &&
+          key_value <= mem->current_put_cache_min_key &&
+          pos < (mem->current_relaxation)){
         result_value = skiplist_remove_min(base_node->root, &key_value);
         if(key_value == ((unsigned long)-1)){
             break;
         }
         //printf("INSERT TO CACHE POS: %lu KEY: %lu\n", pos, key_value);
-        mem->key_value_array[pos*2] = key_value;
-        mem->key_value_array[pos*2+1] = result_value;
+        mem->key_value_array[pos].key = key_value;
+        mem->key_value_array[pos].value = result_value;
         pos++;
+    }
+    mem->current_remove_min_cache_max_key = mem->key_value_array[pos-1].key;
+    if(mem->key_value_array[pos-1].key == ((unsigned long)-1)){
+        mem->current_remove_min_cache_max_key = 0;
+        //printf("reset rem empty %d\n", mem->current_relaxation);
+        mem->current_relaxation = 0;
+        /* mem->current_nr_of_no_waste = 0; */
+    }else if(mem->current_put_cache_min_key < mem->key_value_array[pos-1].key){
+        //We have gone too far redo the last remove min
+        skiplist_put(base_node->root,
+                     mem->key_value_array[pos-1].key,
+                     mem->key_value_array[pos-1].value);
+        pos--;
+        if(pos == 0){
+            mem->key_value_array[0].key = ((unsigned long)-1);
+            mem->key_value_array[0].value = 0;
+            pos++;
+        }
+
+        //Signal flush of put buffer
+        printf("reset rem put cache smaller %d put cache min %lu key %lu put buff index %d\n", mem->current_relaxation, mem->current_put_cache_min_key, mem->key_value_array[pos-1].key, aput_buffer.current_index);
+        mem->current_relaxation = 0;
+        /* mem->current_nr_of_no_waste = 0; */
     }
     mem->size = pos;
     atomic_store_explicit(&mem->pos, 0, memory_order_release);
@@ -808,23 +858,7 @@ static inline void delegate_perform_remove_min_with_lock(unsigned int msgSize, v
  */
 
 
-#define MAX_PUT_RELAXATION MAX_RELAXATION
 
-typedef struct {
-    unsigned long key;
-    unsigned long value;
-} aput_buffer_elem_type;
-
-typedef struct {
-    char pad1[120];
-    unsigned int current_index;
-    aput_buffer_elem_type buffer[MAX_PUT_RELAXATION];
-    unsigned long message_preparation_puffer[MAX_PUT_RELAXATION*2];
-    char pad2[128];
-} aput_buffer_type;
-
-_Alignas(128)
-__thread aput_buffer_type aput_buffer = {.current_index = 0};
 
 static inline void delegate_perform_put_with_lock(unsigned int msgSize, void * msgParam){
     unsigned long * msg = msgParam;
@@ -837,9 +871,9 @@ static inline void delegate_perform_put_with_lock(unsigned int msgSize, void * m
 }
 
 // From https://rosettacode.org/wiki/Sorting_algorithms/Insertion_sort#C
-static inline void insertion_sort(aput_buffer_elem_type *a, unsigned long n) {
+static inline void insertion_sort(pq_elem_type *a, unsigned long n) {
     for(unsigned long i = 1; i < n; ++i) {
-        aput_buffer_elem_type tmp = a[i];
+        pq_elem_type tmp = a[i];
         unsigned long j = i;
         while(j > 0 && tmp.key < a[j - 1].key) {
             a[j] = a[j - 1];
@@ -858,6 +892,7 @@ void acslqdcatree_put_flush(ACSLCATreeSet * set){
         //printf("put buffer size %lu\n", 0);
         return;
     }
+    acdelete_min_write_back_mem.current_put_cache_min_key = (unsigned long)-1;
     //printf("put buffer size %lu\n", aput_buffer_size);
     sort_aput_buffer();
     critical_enter();
@@ -976,6 +1011,27 @@ void acslqdcatree_put_flush(ACSLCATreeSet * set){
 void acslqdcatree_put(ACSLCATreeSet * set,
                     unsigned long key,
                     unsigned long value){
+    if(key < acdelete_min_write_back_mem.current_remove_min_cache_max_key){
+        //need to take the max key from the remove min buffer
+        unsigned long key_tmp = key;
+        unsigned long value_tmp = value;
+        unsigned int pos = acdelete_min_write_back_mem.size-1;
+        key = acdelete_min_write_back_mem.key_value_array[pos].key;
+        value = acdelete_min_write_back_mem.key_value_array[pos].value;
+        //need to put key to the remove min buffer
+        acdelete_min_write_back_mem.key_value_array[pos].key = key_tmp;
+        acdelete_min_write_back_mem.key_value_array[pos].value = value_tmp;
+        unsigned int first_index = atomic_load_explicit(&acdelete_min_write_back_mem.pos, memory_order_relaxed);
+        unsigned int size = acdelete_min_write_back_mem.size - first_index;
+        insertion_sort(&acdelete_min_write_back_mem.key_value_array[first_index], size);
+        //need to zero relaxation
+        printf("reset put smaller than rem cache %d\n", acdelete_min_write_back_mem.current_relaxation);
+        acdelete_min_write_back_mem.current_relaxation = 0; // will flush put buffer
+        /* acdelete_min_write_back_mem.current_nr_of_no_waste = 0; */
+    }
+    if(key < acdelete_min_write_back_mem.current_put_cache_min_key){
+        acdelete_min_write_back_mem.current_put_cache_min_key = key;
+    }
     aput_buffer.buffer[aput_buffer.current_index].key = key;
     aput_buffer.buffer[aput_buffer.current_index].value = value;
     aput_buffer.current_index++;
@@ -992,23 +1048,23 @@ void acslqdcatree_put(ACSLCATreeSet * set,
 
 void acslqdcatree_signal_no_waste(ACSLCATreeSet * set){
     (void)set;
-    acdelete_min_write_back_mem.current_nr_of_no_waste++;
-    if(acdelete_min_write_back_mem.current_nr_of_no_waste == NR_OF_NO_WASTE_BEFORE_INCREASE_RELAXATION){
-        if(acdelete_min_write_back_mem.current_relaxation == MAX_RELAXATION){
-            acdelete_min_write_back_mem.current_nr_of_no_waste = 0;
-        }else{
-            acdelete_min_write_back_mem.current_relaxation++;
-            acdelete_min_write_back_mem.current_nr_of_no_waste = 0;
-        }
-    }
+    /* acdelete_min_write_back_mem.current_nr_of_no_waste++; */
+    /* if(acdelete_min_write_back_mem.current_nr_of_no_waste == NR_OF_NO_WASTE_BEFORE_INCREASE_RELAXATION){ */
+    /*     if(acdelete_min_write_back_mem.current_relaxation == MAX_RELAXATION){ */
+    /*         acdelete_min_write_back_mem.current_nr_of_no_waste = 0; */
+    /*     }else{ */
+    /*         acdelete_min_write_back_mem.current_relaxation++; */
+    /*         acdelete_min_write_back_mem.current_nr_of_no_waste = 0; */
+    /*     } */
+    /* } */
     //printf("NO WASTE: %d %d\n", acdelete_min_write_back_mem.current_relaxation, acdelete_min_write_back_mem.current_nr_of_no_waste);
 }
 
 void acslqdcatree_signal_waste(ACSLCATreeSet * set){
     (void)set;
-    acdelete_min_write_back_mem.current_relaxation = acdelete_min_write_back_mem.current_relaxation / 2;
-    printf("WASTE: %d\n", acdelete_min_write_back_mem.current_relaxation);
-    acdelete_min_write_back_mem.current_nr_of_no_waste = 0;
+    /* acdelete_min_write_back_mem.current_relaxation = acdelete_min_write_back_mem.current_relaxation / 2; */
+    /* printf("WASTE: %d\n", acdelete_min_write_back_mem.current_relaxation); */
+    /* acdelete_min_write_back_mem.current_nr_of_no_waste = 0; */
 }
 
 
@@ -1019,13 +1075,20 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     unsigned long pos = atomic_load_explicit(&acdelete_min_write_back_mem.pos, memory_order_relaxed);
     unsigned long cache_size = acdelete_min_write_back_mem.size;
     if(pos < cache_size){
-        unsigned long key = acdelete_min_write_back_mem.key_value_array[pos*2];
-        unsigned long value = acdelete_min_write_back_mem.key_value_array[pos*2+1];
+        unsigned long key = acdelete_min_write_back_mem.key_value_array[pos].key;
+        unsigned long value = acdelete_min_write_back_mem.key_value_array[pos].value;
         atomic_store_explicit(&acdelete_min_write_back_mem.pos, pos + 1, memory_order_relaxed);
+        if((pos+1) == cache_size){
+            //Reset max cache key
+            acdelete_min_write_back_mem.current_remove_min_cache_max_key = 0;
+        }
         //printf("REMOVE FROM CACHE: %lu pos: %lu\n", key, pos);
         *key_write_back = key;
         //printf("remove (cached) key %lu\n", key);
         return value;
+    }
+    if(acdelete_min_write_back_mem.current_relaxation < MAX_RELAXATION){
+        acdelete_min_write_back_mem.current_relaxation++;
     }
     critical_enter();
     //Find leftmost routing node
@@ -1069,13 +1132,18 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
                 // Spin wait
                 asm("pause");
             }
-            unsigned long key = acdelete_min_write_back_mem.key_value_array[0];
-            unsigned long value = acdelete_min_write_back_mem.key_value_array[1];
+            unsigned long key = acdelete_min_write_back_mem.key_value_array[0].key;
+            unsigned long value = acdelete_min_write_back_mem.key_value_array[0].value;
             atomic_store_explicit(&acdelete_min_write_back_mem.pos, 1, memory_order_relaxed);
             if(key == ((unsigned long)-1) && aput_buffer.current_index != 0){
                 critical_exit();
                 acslqdcatree_put_flush(set);
                 return acslqdcatree_remove_min(set, key_write_back);
+            }else if(acdelete_min_write_back_mem.current_relaxation == 0){/*Someone has hinted*/
+                critical_exit();
+                acslqdcatree_put_flush(set);
+                *key_write_back = key;
+                return value;
             }
             *key_write_back = key;
             critical_exit();
@@ -1120,8 +1188,8 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     achelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
     perform_remove_min_with_lock(&acdelete_min_write_back_mem);
     //Read the first from the cache
-    unsigned long key = acdelete_min_write_back_mem.key_value_array[0];
-    unsigned long value = acdelete_min_write_back_mem.key_value_array[1];
+    unsigned long key = acdelete_min_write_back_mem.key_value_array[0].key;
+    unsigned long value = acdelete_min_write_back_mem.key_value_array[0].value;
     //printf("remove  key %lu\n", key);
     //printf("REMOVE FROM CACHE AFTER FILL: %lu pos: %lu\n", key, 0);
     atomic_store_explicit(&acdelete_min_write_back_mem.pos, 1, memory_order_relaxed);
@@ -1136,6 +1204,10 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     if(key == ((unsigned long)-1) && aput_buffer.current_index != 0){
         acslqdcatree_put_flush(set);
         return acslqdcatree_remove_min(set, key_write_back);
+    }else if(acdelete_min_write_back_mem.current_relaxation == 0){/*Someone has hinted*/
+        acslqdcatree_put_flush(set);
+        *key_write_back = key;
+        return value;
     }
     return value;
 }
