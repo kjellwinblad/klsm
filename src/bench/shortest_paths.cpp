@@ -41,6 +41,7 @@ constexpr int DEFAULT_SEED       = 0;
 #define PQ_KLSM       "klsm"
 #define PQ_MULTIQ     "multiq"
 
+
 static hwloc_wrapper hwloc; /**< Thread pinning functionality. */
 
 static std::atomic<bool> start_barrier(false);
@@ -334,7 +335,7 @@ main(int argc,
     }
 
     s.type = argv[optind];
-
+    
     if (s.type == PQ_DLSM) {
         kpq::dist_lsm<uint32_t, task_t *, DEFAULT_RELAXATION> pq;
         ret = bench(&pq, s);

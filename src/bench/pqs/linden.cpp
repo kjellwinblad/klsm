@@ -1,8 +1,8 @@
 #include "linden.h"
 
 extern "C" {
-#include "spraylist/gc/gc.h"
-#include "spraylist/linden.h"
+#include "spraylist2/gc/gc.h"
+#include "spraylist2/linden.h"
 }
 
 namespace kpqbench
@@ -38,15 +38,41 @@ void
 Linden::insert(const uint32_t &key,
                const uint32_t &value)
 {
-    linden_insert(m_q->pq, key, value);
+    /*Add 1 to key to support 0 keys*/
+    linden_insert(m_q->pq, key+1, value);
+}
+
+void
+Linden::insert(const size_t &key,
+               const size_t &value)
+{
+    /*Add 1 to key to support 0 keys*/
+    linden_insert(m_q->pq, key+1, value);
 }
 
 bool
 Linden::delete_min(uint32_t &v)
-{
-    unsigned long value;
-    v = deletemin(m_q->pq);
-    return true;
+{   
+    unsigned long k_ret;
+    v = (uint32_t)deletemin_key(m_q->pq, &k_ret);
+    if(k_ret == ((unsigned long)-1)){
+        return false;
+    }else{
+        return true;
+    }
 }
 
+bool
+Linden::delete_min(size_t &k, size_t &v)
+{   
+    unsigned long k_ret;
+    v = deletemin_key(m_q->pq, &k_ret);
+    k = k_ret -1;
+    if(k_ret == ((unsigned long)-1)){
+        return false;
+    }else{
+        return true;
+    }
+}
+    
 }

@@ -50,12 +50,30 @@ QDCATree::insert(const uint32_t &key,
     qdcatree_insert(m_q->pq, key, value);
 }
 
+void
+QDCATree::insert(const size_t &key,
+                 const size_t &value)
+{
+    slqdcatree_put(m_q->pq,
+                   (unsigned long) key,
+                   (unsigned long) value);
+}
+
 bool
 QDCATree::delete_min(uint32_t &v)
 {
     unsigned long key_write_back;
     v = (uint32_t)slqdcatree_remove_min(m_q->pq, &key_write_back);
-    return key_write_back == ((unsigned long)-1);
+    return key_write_back != ((unsigned long)-1);
+}
+
+bool
+QDCATree::delete_min(size_t &k, size_t &v)
+{
+    unsigned long key_write_back;
+    v = (size_t)slqdcatree_remove_min(m_q->pq, &key_write_back);
+    k = (size_t)key_write_back;
+    return key_write_back != ((unsigned long)-1);
 }
 
 }

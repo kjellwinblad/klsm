@@ -1,10 +1,10 @@
 #include "spraylist.h"
 
 extern "C" {
-#include "spraylist/include/random.h"
-#include "spraylist/intset.h"
-#include "spraylist/linden.h"
-#include "spraylist/pqueue.h"
+#include "spraylist2/include/random.h"
+#include "spraylist2/intset.h"
+#include "spraylist2/linden.h"
+#include "spraylist2/pqueue.h"
 #include "ssalloc.h"
 }
 
@@ -55,14 +55,39 @@ void
 spraylist::insert(const uint32_t &k,
                   const uint32_t &v)
 {
-    sl_add(m_q, k, READ_ADD_REM_ELASTIC_TX);
+    sl_add_val(m_q, k, v, TRANSACTIONAL);
+}
+
+void
+spraylist::insert(const size_t &k,
+                  const size_t &v)
+{
+    sl_add_val(m_q, k, v, TRANSACTIONAL);
 }
 
 bool
 spraylist::delete_min(uint32_t &v)
 {
-    const int ret = spray_delete_min(m_q, &v, d);
+    unsigned long k_ret;
+    unsigned long v_ret;
+    const int ret = spray_delete_min_key(m_q, &k_ret, &v_ret, d);
+    v = (uint32_t)v_ret;
     return (ret == 1);
 }
+
+bool
+spraylist::delete_min(size_t &k, size_t &v)
+{
+    unsigned long k_ret;
+    unsigned long v_ret;
+    int ret;
+    do{
+        ret = spray_delete_min_key(m_q, &k_ret, &v_ret, d);
+    }while(ret == 0 && k_ret != ((unsigned long)-1));
+    k = k_ret;
+    v = v_ret;
+    return k_ret != ((unsigned long)-1);
+}
+    
 
 }

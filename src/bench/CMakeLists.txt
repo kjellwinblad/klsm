@@ -50,4 +50,6 @@ target_link_libraries(file_shortest_paths
     sequential_lsm
     skip_queue
     thread_local_ptr
+    spraylist
+    qdcatree
 )

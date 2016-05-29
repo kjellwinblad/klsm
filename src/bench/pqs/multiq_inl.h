@@ -36,6 +36,52 @@ multiq<K, V, C>::~multiq()
 
 template <class K, class V, int C>
 bool
+    multiq<K, V, C>::delete_min(K &key, V &value)
+{
+    /* Peek at two random queues and lock the one with the minimal item. */
+    const int nqueues = num_queues();
+    size_t i, j;
+    int retry_count = 25;
+ delete_min_start_label:
+    while (true) {
+        do {
+            i = local_rng() % nqueues;
+            j = local_rng() % nqueues;
+
+            if (m_queues[i].m_top > m_queues[j].m_top) {
+                std::swap(i, j);
+            }
+        } while (!lock(i));
+
+        auto &pq = m_queues[i].m_pq;
+        const auto item = pq.top();
+
+        if (item.key == SENTINEL_KEY) {
+            // Empty queue, retry a few times.
+            // TODO: Not a permanent solution
+            unlock(i);
+            if(retry_count == 0){
+                return false;
+            }else{
+                retry_count--;
+                goto delete_min_start_label;
+            }
+        } else {
+            key = item.key;
+            value = item.value;
+            pq.pop();
+            unlock(i);
+            return true;
+        }
+    }
+
+    assert(false);  // Never reached.
+    return false;
+}
+
+
+template <class K, class V, int C>
+bool
 multiq<K, V, C>::delete_min(V &value)
 {
     /* Peek at two random queues and lock the one with the minimal item. */

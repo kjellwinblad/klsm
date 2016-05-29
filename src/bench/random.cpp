@@ -73,6 +73,12 @@
 #define VAL_TYPE      uint32_t
 #endif
 
+
+/*Needed for the combining elimination queue*/
+int _gNumThreads;
+int number_of_threads;
+
+
 /**
  * Uniform: Each thread performs 50% inserts, 50% deletes.
  * Split: 50% of threads perform inserts, 50% of threads perform deletes (in case of an
@@ -827,6 +833,10 @@ main(int argc,
         }
     }
 
+
+    _gNumThreads = settings.nthreads;
+    number_of_threads =  settings.nthreads;
+
     settings.type = argv[optind];
     if (!settings.are_valid()) {
         usage();
@@ -860,7 +870,7 @@ main(int argc,
 #ifndef ENABLE_QUALITY
     } else if (settings.type == PQ_LINDEN) {
         kpqbench::Linden pq(kpqbench::Linden::DEFAULT_OFFSET);
-        pq.insert(42, 42); /* A hack to avoid segfault on destructor in empty linden queue. */
+        pq.insert((uint32_t)42, (uint32_t)42); /* A hack to avoid segfault on destructor in empty linden queue. */
         ret = bench(&pq, settings);
     } else if (settings.type == PQ_LSM) {
         kpq::LSM<KEY_TYPE> pq;

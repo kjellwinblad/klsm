@@ -85,7 +85,11 @@ public:
 
     void insert(const K &key, const V &value);
     bool delete_min(V &value);
+    bool delete_min(K &key, V &value);
     void clear();
+
+    void signal_waste(){}
+    void signal_no_waste(){}
 
     void print() const;
 

@@ -30,6 +30,11 @@
 
 #include "pqs/globallock.h"
 #include "pqs/multiq.h"
+#include "pqs/linden.h"
+#include "pqs/qdcatree.h"
+#include "pqs/cachedqdcatree.h"
+#include "pqs/adaptivecachedqdcatree.h"
+#include "pqs/spraylist.h"
 #include "dist_lsm/dist_lsm.h"
 #include "k_lsm/k_lsm.h"
 #include "util.h"
@@ -43,10 +48,20 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_DLSM       "dlsm"
 #define PQ_GLOBALLOCK "globallock"
 #define PQ_KLSM       "klsm"
+#define PQ_KLSM16     "klsm16"
+#define PQ_KLSM128    "klsm128"
+#define PQ_KLSM256    "klsm256"
+#define PQ_KLSM4096   "klsm4096"
 #define PQ_MULTIQ     "multiq"
-
+#define PQ_LINDEN     "linden"
+#define PQ_SPRAYLIST  "spraylist"
+#define PQ_QDCATREE   "qdcatree"
+#define PQ_RELAXED_QDCATREE "relaxedqdcatree"
+#define PQ_ADAPTIVE_RELAXED_QDCATREE "adaptiverelaxedqdcatree"
 /* Hack to support graphs that are badly formatted */
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
+
+int number_of_threads;
 
 static hwloc_wrapper hwloc; /**< Thread pinning functionality. */
 
@@ -77,6 +92,7 @@ struct edge_t {
 struct vertex_t {
     size_t num_edges;
     std::atomic<size_t> distance;
+    bool processed;
     edge_t *edges;
 };
 
@@ -124,6 +140,7 @@ read_graph(std::string file_path,
     for(size_t i = 0; i < n; i++){
         data[i].num_edges = 0;
         data[i].distance.store(std::numeric_limits<size_t>::max(), std::memory_order_relaxed );
+        data[i].processed = false;
         data[i].edges = NULL;
     }
     for(size_t i = 0; i < n; i++){
@@ -231,8 +248,9 @@ bench_thread(T *pq,
              const int thread_id,
              vertex_t *graph)
 {
-    (void)number_of_threads;
+    bool record_processed = true;
     hwloc.pin_to_core(thread_id);
+    pq->init_thread(number_of_threads);
     while (!start_barrier.load(std::memory_order_relaxed)) {
         /* Wait. */
     }
@@ -240,6 +258,7 @@ bench_thread(T *pq,
     //int threads_waiting;
     //(threads_waiting = wt.threads_waiting_to_succeed.load(std::memory_order_relaxed)) < number_of_threads
     std::cout << "Start\n";
+    //size_t max_dist = 0;
     while (true) {
         // if(!last_success && threads_waiting == 0){
         //     last_success = true;
@@ -267,27 +286,47 @@ bench_thread(T *pq,
             //wt.threads_waiting_to_succeed.fetch_add(1);
             
         }
-        //std::cout << "NODE DELTED: " << node << " DISTANCE " << distance << std::endl << std::flush;
+        // if(distance > max_dist){
+        //     max_dist = distance;
+        //     std::cout << "NODE DELTED: " << node << " DISTANCE " << distance << std::endl << std::flush    ;
+        // }
         // if(threads_waiting > 0){
         //     wt.threads_waiting_to_succeed = 0;
         // }
-        const vertex_t *v = &graph[node];
+        vertex_t *v = &graph[node];
         const size_t v_dist = v->distance.load(std::memory_order_relaxed);
 
         if (distance > v_dist) {
-            /* Better estimate already found */
+            /*Dead node... ignore*/
             continue;
         }
+        if(record_processed){
+            if(v->processed){
+                std::cout << "SHOULD NOT HAPPEN!!! " // << w_dist << " " << new_dist <<" "<<e->weight 
+                          << std::endl;
+                pq->signal_waste();
+            }else{
+                v->processed = true;
+                pq->signal_no_waste();
+            }
+        }
+        //std::cout << "process " << node << "\n";
         for (size_t i = 0; i < v->num_edges; i++) {
             const edge_t *e = &v->edges[i];
             const size_t new_dist = v_dist + e->weight;
-
+            //  std::cout << "traverse to " << e->target << " using weight " <<  e->weight << "\n";
             vertex_t *w = &graph[e->target];
             size_t w_dist = w->distance.load(std::memory_order_relaxed);
 
             if (new_dist >= w_dist) {
                 continue;
-            }
+            }// else if(w_dist < std::numeric_limits<size_t>::max()){
+            //     /* Last processing of the node was wasted work */
+
+            //     pq->signal_waste();
+            // }else{
+            //     pq->signal_no_waste();
+            // }
 
             bool dist_updated;
             do {
@@ -323,7 +362,8 @@ bench(T *pq,
 
     /* Our initial node is graph[0]. */
 
-    pq->insert(0, 0);
+    pq->insert((size_t)0, (size_t)0);
+
     graph[0].distance.store(0);
 
     /* Start all threads. */
@@ -424,6 +464,8 @@ main(int argc,
 
     s.type = argv[optind];
 
+    number_of_threads =  s.num_threads;
+    
     if (s.type == PQ_DLSM) {
         kpq::dist_lsm<size_t, size_t, DEFAULT_RELAXATION> pq;
         ret = bench(&pq, s);
@@ -433,13 +475,31 @@ main(int argc,
     }else if (s.type == PQ_GLOBALLOCK) {
          kpqbench::GlobalLock<size_t, size_t> pq;
          ret = bench(&pq, s);
-    }// else if (s.type == PQ_GLOBALLOCK) {
-    //     kpqbench::GlobalLock<size_t, size_t> pq;
-    //     ret = bench(&pq, s);
-    // } else if (s.type == PQ_MULTIQ) {
-    //     kpqbench::multiq<size_t, size_t> pq(s.num_threads);
-    //     ret = bench(&pq, s);
-    // }
+    } else if (s.type == PQ_MULTIQ) {
+        kpqbench::multiq<size_t, size_t> pq(s.num_threads);
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_SPRAYLIST) {
+        kpqbench::spraylist pq;
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_LINDEN) {
+        kpqbench::Linden pq(kpqbench::Linden::DEFAULT_OFFSET);
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_QDCATREE) {
+        kpqbench::QDCATree pq;
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_RELAXED_QDCATREE) {
+        kpqbench::CachedQDCATree pq;
+        /*Insert too many start nodes may result in some
+          wasted work but is still correct*/
+        pq.insert((size_t)0, (size_t)0);
+        pq.flush_insert_cache();
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_ADAPTIVE_RELAXED_QDCATREE) {
+        kpqbench::AdaptiveCachedQDCATree pq;
+        pq.insert((size_t)0, (size_t)0);
+        pq.flush_insert_cache();
+        ret = bench(&pq, s);
+    }
     else {
         usage();
     }

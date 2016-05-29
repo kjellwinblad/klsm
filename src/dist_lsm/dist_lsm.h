@@ -59,6 +59,9 @@ public:
     bool delete_min(K &key, V &val);
     void find_min(typename block<K, V>::peek_t &best);
 
+    void signal_waste(){}
+    void signal_no_waste(){}
+    
     int spy();
 
     void print();

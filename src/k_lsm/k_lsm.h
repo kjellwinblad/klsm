@@ -50,6 +50,9 @@ public:
     bool delete_min(V &val);
     bool delete_min(K &key, V &val);
 
+    void signal_waste(){}
+    void signal_no_waste(){}
+    
     void init_thread(const size_t) const { }
     constexpr static bool supports_concurrency() { return true; }
 

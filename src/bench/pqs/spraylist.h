@@ -36,8 +36,13 @@ public:
     void init_thread(const size_t nthreads);
 
     void insert(const uint32_t &k, const uint32_t &v);
+    void insert(const size_t &k, const size_t &v);
     bool delete_min(uint32_t &v);
+    bool delete_min(size_t &k, size_t &v);
 
+    void signal_waste(){}
+    void signal_no_waste(){}
+    
     static void print_name() { std::cout << "spraylist"; }
     constexpr static bool supports_concurrency() { return true; }
 

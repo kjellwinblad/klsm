@@ -64,6 +64,9 @@ public:
     bool delete_min(K &key, V &value);
     void clear();
 
+    void signal_waste(){}
+    void signal_no_waste(){}
+    
     void print() const;
 
     void init_thread(const size_t) const { }
@@ -211,7 +214,7 @@ void GlobalLock<K, V>::print() const
 {
     /* NOP */
 }
-
+ 
 }
 
 #endif /* __GLOBALLOCK_H */
