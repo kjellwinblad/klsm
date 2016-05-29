@@ -2,12 +2,9 @@ import sys
 import subprocess
 THREAD_COUNTS=[1,2,4,8,16,32,63,64]
 EDGE_WEIGHT_RANGES=[0,100,10000,1000000]
-GRAPH_FILES=[("../pqbenchmarks/paper/inputs/soc-LiveJournal1.txt", "live")]
-
+GRAPH_FILES=[("com-orkut.ungraph.txt", "orkut"), ("grid1000_undir.txt", "undirgrid"), ("roadNet-CA.txt", "roadnet"),  ("soc-LiveJournal1.txt","live")]
 post_fix = sys.argv[1]
 data_structure = sys.argv[2]
-
-
 
 for (graph_file, graph_file_name) in GRAPH_FILES:
     for edge_weight in EDGE_WEIGHT_RANGES:
@@ -25,7 +22,7 @@ for (graph_file, graph_file_name) in GRAPH_FILES:
             print("running command: " + " ".join(command))
             output = subprocess.check_output(command).decode("utf-8") 
             print("output: " + str(output))
-            diff_output = subprocess.check_output(["diff", "model_output", "output_to_check"])..decode("utf-8")
+            diff_output = subprocess.check_output(["diff", "model_output", "output_to_check"]).decode("utf-8")
             if(diff_output != ""):
                 print("DIFF FROM MODEL")
                 result_output.write(str(thread_count) + " error!")

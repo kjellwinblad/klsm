@@ -833,7 +833,7 @@ void perform_remove_min_with_lock(acdelete_min_write_back_mem_type * mem){
         }
 
         //Signal flush of put buffer
-        printf("reset rem put cache smaller %d put cache min %lu key %lu put buff index %d\n", mem->current_relaxation, mem->current_put_cache_min_key, mem->key_value_array[pos-1].key, aput_buffer.current_index);
+        //printf("reset rem put cache smaller %d put cache min %lu key %lu put buff index %d\n", mem->current_relaxation, mem->current_put_cache_min_key, mem->key_value_array[pos-1].key, aput_buffer.current_index);
         mem->current_relaxation = 0;
         /* mem->current_nr_of_no_waste = 0; */
     }
@@ -1025,7 +1025,7 @@ void acslqdcatree_put(ACSLCATreeSet * set,
         unsigned int size = acdelete_min_write_back_mem.size - first_index;
         insertion_sort(&acdelete_min_write_back_mem.key_value_array[first_index], size);
         //need to zero relaxation
-        printf("reset put smaller than rem cache %d\n", acdelete_min_write_back_mem.current_relaxation);
+        //printf("reset put smaller than rem cache %d\n", acdelete_min_write_back_mem.current_relaxation);
         acdelete_min_write_back_mem.current_relaxation = 0; // will flush put buffer
         /* acdelete_min_write_back_mem.current_nr_of_no_waste = 0; */
     }
