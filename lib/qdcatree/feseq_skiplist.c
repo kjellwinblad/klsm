@@ -494,7 +494,7 @@ bool skiplist_more_than_two_keys(Skiplist * skiplist){
     struct find_result fr = find_neigbours(head_node, ULONG_MAX);
     SkiplistNode * last_node = fr.neigbours_before[SKIPLIST_NUM_OF_LEVELS -1];
     SkiplistNode * first_node = head_node->lower_lists[SKIPLIST_NUM_OF_LEVELS -1];
-    return (last_node != head_node && last_node->max_key != first_node->key_values[first_node->first_key_value_pos].key);
+    return (last_node != head_node && last_node != first_node && last_node->max_key != first_node->key_values[first_node->first_key_value_pos].key);
 }
 
 /* This function assumes that the input skiplist has at least two different keys */
