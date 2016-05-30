@@ -684,7 +684,8 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
 
 static inline void adaptAndUnlock(ACSLCATreeSet * set,
                                   CATreeBaseOrRouteNode * currentNode,
-                                  CATreeBaseOrRouteNode * prevNode){
+                                  CATreeBaseOrRouteNode * prevNode,
+                                  int pathLength){
     CATreeBaseNode * node = &currentNode->baseOrRoute.base;
     CATreeLock * lock = &node->lock;
 #ifndef NO_CA_TREE_ADAPTION
@@ -697,7 +698,7 @@ static inline void adaptAndUnlock(ACSLCATreeSet * set,
     }else{
         currentCATreeRouteNode = &prevNode->baseOrRoute.route;
     }
-    if(lock->statistics > AACSLCATREE_MAX_CONTENTION_STATISTICS){
+    if(lock->statistics > AACSLCATREE_MAX_CONTENTION_STATISTICS && pathLength <= 10){
         high_contention = true;
     } else if(lock->statistics < AACSLCATREE_MIN_CONTENTION_STATISTICS){
         low_contention = true;
@@ -1002,7 +1003,8 @@ void acslqdcatree_put_flush(ACSLCATreeSet * set){
         achelp_info.flush_stack_pos = 0;    
         adaptAndUnlock(set,
                        achelp_info.last_locked_node,
-                       achelp_info.last_locked_node_parent);
+                       achelp_info.last_locked_node_parent,
+                       pathLength);
         continue;
     }
     aput_buffer.current_index = 0;
@@ -1013,6 +1015,7 @@ void acslqdcatree_put_flush(ACSLCATreeSet * set){
 void acslqdcatree_put(ACSLCATreeSet * set,
                     unsigned long key,
                     unsigned long value){
+    //bool flush = false;
     if(key < acdelete_min_write_back_mem.current_remove_min_cache_max_key){
         //need to take the max key from the remove min buffer
         unsigned long key_tmp = key;
@@ -1028,7 +1031,8 @@ void acslqdcatree_put(ACSLCATreeSet * set,
         insertion_sort(&acdelete_min_write_back_mem.key_value_array[first_index], size);
         //need to zero relaxation
         //printf("reset put smaller than rem cache %d\n", acdelete_min_write_back_mem.current_relaxation);
-        acdelete_min_write_back_mem.current_relaxation = 0; // will flush put buffer
+        acdelete_min_write_back_mem.current_relaxation = 0;
+        //flush = true;// will flush put buffer
         /* acdelete_min_write_back_mem.current_nr_of_no_waste = 0; */
     }
     if(key < acdelete_min_write_back_mem.current_put_cache_min_key){
@@ -1100,7 +1104,9 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     CATreeRouteNode * current_route_node = NULL;
     CATreeBaseNode * base_node;
     bool contended;
+    int pathLength;
     do {
+        pathLength = 0;
         retry = 0;
         prev_node = NULL;
         current_node = ACCESS_ONCE(set->root);
@@ -1109,6 +1115,7 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
             current_route_node = &current_node->baseOrRoute.route;
             prev_node = current_node;
             current_node = current_route_node->left;
+            pathLength++;
         }
         base_node = &current_node->baseOrRoute.base;
         DEBUG_PRINT(("remove min lock %p\n", current_node));
@@ -1200,7 +1207,8 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     //printf("RL RM %lu \n", pthread_self());
     adaptAndUnlock(set,
                    achelp_info.last_locked_node,
-                   achelp_info.last_locked_node_parent);
+                   achelp_info.last_locked_node_parent,
+                   pathLength);
 
     critical_exit();
     if(key == ((unsigned long)-1) && aput_buffer.current_index != 0){

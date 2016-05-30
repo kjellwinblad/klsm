@@ -13,7 +13,8 @@
 /* Queue Delegation Queue */
 
 #ifndef QD_QUEUE_BUFFER_SIZE
-#define QD_QUEUE_BUFFER_SIZE (1024 + 512)
+#define QD_QUEUE_BUFFER_SIZE 8192
+//(1024 + 512)
 #endif
 #define QD_QUEUE_EMPTY_POS 1
 #define QD_QUEUE_EMPTY_POS_FULL 2
