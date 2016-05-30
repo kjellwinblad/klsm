@@ -482,10 +482,22 @@ main(int argc,
     if (s.type == PQ_DLSM) {
         kpq::dist_lsm<size_t, size_t, DEFAULT_RELAXATION> pq;
         ret = bench(&pq, s);
-    }  else if (s.type == PQ_KLSM) {
+    } else if (s.type == PQ_KLSM) {
          kpq::k_lsm<size_t, size_t, DEFAULT_RELAXATION> pq;
          ret = bench(&pq, s);
-    }else if (s.type == PQ_GLOBALLOCK) {
+    } else if (s.type == PQ_KLSM16) {
+         kpq::k_lsm<size_t, size_t, 16> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_KLSM128) {
+         kpq::k_lsm<size_t, size_t, 128> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_KLSM256) {
+         kpq::k_lsm<size_t, size_t, 256> pq;
+         ret = bench(&pq, s);
+    }  else if (s.type == PQ_KLSM4096) {
+         kpq::k_lsm<size_t, size_t, 4096> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_GLOBALLOCK) {
          kpqbench::GlobalLock<size_t, size_t> pq;
          ret = bench(&pq, s);
     } else if (s.type == PQ_MULTIQ) {
