@@ -60,6 +60,8 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_ADAPTIVE_RELAXED_QDCATREE "adaptiverelaxedqdcatree"
 /* Hack to support graphs that are badly formatted */
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
+/* hwloc does not work on all platforms */
+#define MANUAL_PINNING 1
 
 int number_of_threads;
 
@@ -249,7 +251,18 @@ bench_thread(T *pq,
              vertex_t *graph)
 {
     bool record_processed = false;
+#ifdef MANUAL_PINNING
+    int cpu = 4*(thread_id%16) + thread_id/16;
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu, &cpuset);
+    
+    if( pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset) != 0 ){
+        printf( "error setting affinity to %d\n", (int)cpu );
+    }
+#else
     hwloc.pin_to_core(thread_id);
+#endif
     pq->init_thread(number_of_threads);
     while (!start_barrier.load(std::memory_order_relaxed)) {
         /* Wait. */
@@ -257,7 +270,7 @@ bench_thread(T *pq,
     //bool last_success = true;
     //int threads_waiting;
     //(threads_waiting = wt.threads_waiting_to_succeed.load(std::memory_order_relaxed)) < number_of_threads
-    std::cerr << "Start\n";
+    //std::cerr << "Start\n";
     //size_t max_dist = 0;
     while (true) {
         // if(!last_success && threads_waiting == 0){
@@ -278,7 +291,7 @@ bench_thread(T *pq,
                 std::this_thread::yield();
             }
             if(!success){
-                std::cerr << "exit\n";
+                //std::cerr << "exit\n";
                 //We give up... No work for us
                 break;
             }
