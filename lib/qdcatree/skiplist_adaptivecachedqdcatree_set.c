@@ -819,7 +819,6 @@ void perform_remove_min_with_lock(acdelete_min_write_back_mem_type * mem){
         mem->current_remove_min_cache_max_key = 0;
         //printf("reset rem empty %d\n", mem->current_relaxation);
         mem->current_relaxation = 0;
-        /* mem->current_nr_of_no_waste = 0; */
     }else if(mem->current_put_cache_min_key < mem->key_value_array[pos-1].key){
         //We have gone too far redo the last remove min
         skiplist_put(base_node->root,
@@ -829,7 +828,10 @@ void perform_remove_min_with_lock(acdelete_min_write_back_mem_type * mem){
         if(pos == 0){
             mem->key_value_array[0].key = ((unsigned long)-1);
             mem->key_value_array[0].value = 0;
+            mem->current_remove_min_cache_max_key = 0;
             pos++;
+        }else{
+            mem->current_remove_min_cache_max_key = mem->key_value_array[pos-1].key;
         }
 
         //Signal flush of put buffer
