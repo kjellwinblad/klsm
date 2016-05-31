@@ -837,7 +837,7 @@ void perform_remove_min_with_lock(acdelete_min_write_back_mem_type * mem){
 
         //Signal flush of put buffer
         //printf("reset rem put cache smaller %d put cache min %lu key %lu put buff index %d\n", mem->current_relaxation, mem->current_put_cache_min_key, mem->key_value_array[pos-1].key, aput_buffer.current_index);
-        mem->current_relaxation = 0;
+        mem->current_relaxation = mem->current_relaxation / 2;
         /* mem->current_nr_of_no_waste = 0; */
     }
     mem->size = pos;
@@ -1015,7 +1015,7 @@ void acslqdcatree_put_flush(ACSLCATreeSet * set){
 void acslqdcatree_put(ACSLCATreeSet * set,
                     unsigned long key,
                     unsigned long value){
-    //bool flush = false;
+    bool flush = false;
     if(key < acdelete_min_write_back_mem.current_remove_min_cache_max_key){
         //need to take the max key from the remove min buffer
         unsigned long key_tmp = key;
@@ -1031,8 +1031,8 @@ void acslqdcatree_put(ACSLCATreeSet * set,
         insertion_sort(&acdelete_min_write_back_mem.key_value_array[first_index], size);
         //need to zero relaxation
         //printf("reset put smaller than rem cache %d\n", acdelete_min_write_back_mem.current_relaxation);
-        acdelete_min_write_back_mem.current_relaxation = 0;
-        //flush = true;// will flush put buffer
+        acdelete_min_write_back_mem.current_relaxation = acdelete_min_write_back_mem.current_relaxation / 2;
+        flush = true;// will flush put buffer
         /* acdelete_min_write_back_mem.current_nr_of_no_waste = 0; */
     }
     if(key < acdelete_min_write_back_mem.current_put_cache_min_key){
@@ -1042,7 +1042,7 @@ void acslqdcatree_put(ACSLCATreeSet * set,
     aput_buffer.buffer[aput_buffer.current_index].value = value;
     aput_buffer.current_index++;
     //printf("put  %lu %lu\n", key, value);
-    if(aput_buffer.current_index >= acdelete_min_write_back_mem.current_relaxation){
+    if(flush || aput_buffer.current_index >= acdelete_min_write_back_mem.current_relaxation){
         acslqdcatree_put_flush(set);
     }
     return;
@@ -1096,6 +1096,7 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     if(acdelete_min_write_back_mem.current_relaxation < MAX_RELAXATION){
         acdelete_min_write_back_mem.current_relaxation++;
     }
+    unsigned int prev_relaxation = acdelete_min_write_back_mem.current_relaxation;
     critical_enter();
     //Find leftmost routing node
     int retry;
@@ -1148,7 +1149,7 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
                 critical_exit();
                 acslqdcatree_put_flush(set);
                 return acslqdcatree_remove_min(set, key_write_back);
-            }else if(acdelete_min_write_back_mem.current_relaxation == 0){/*Someone has hinted*/
+            }else if(acdelete_min_write_back_mem.current_relaxation < prev_relaxation){/*Someone has hinted*/
                 critical_exit();
                 acslqdcatree_put_flush(set);
                 *key_write_back = key;
@@ -1214,7 +1215,7 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     if(key == ((unsigned long)-1) && aput_buffer.current_index != 0){
         acslqdcatree_put_flush(set);
         return acslqdcatree_remove_min(set, key_write_back);
-    }else if(acdelete_min_write_back_mem.current_relaxation == 0){/*Someone has hinted*/
+    }else if(acdelete_min_write_back_mem.current_relaxation < prev_relaxation){/*Someone has hinted*/
         acslqdcatree_put_flush(set);
         *key_write_back = key;
         return value;
