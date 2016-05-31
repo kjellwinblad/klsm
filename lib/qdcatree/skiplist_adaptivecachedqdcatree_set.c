@@ -698,7 +698,7 @@ static inline void adaptAndUnlock(ACSLCATreeSet * set,
     }else{
         currentCATreeRouteNode = &prevNode->baseOrRoute.route;
     }
-    if(lock->statistics > AACSLCATREE_MAX_CONTENTION_STATISTICS && pathLength <= 10){
+    if(lock->statistics > AACSLCATREE_MAX_CONTENTION_STATISTICS && pathLength <= 25){
         high_contention = true;
     } else if(lock->statistics < AACSLCATREE_MIN_CONTENTION_STATISTICS){
         low_contention = true;
@@ -850,7 +850,7 @@ static inline void delegate_perform_remove_min_with_lock(unsigned int msgSize, v
     acdelete_min_write_back_mem_type * mem = *((acdelete_min_write_back_mem_type **)msgParam);
     //drmcs_rlock(&set->globalLock);
     perform_remove_min_with_lock(mem);
-    achelp_info.last_locked_node->baseOrRoute.base.lock.statistics += AACSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
+    achelp_info.last_locked_node->baseOrRoute.base.lock.statistics += AACSLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
 }
 
 
@@ -1174,7 +1174,7 @@ unsigned long acslqdcatree_remove_min(ACSLCATreeSet * set, unsigned long * key_w
     achelp_info.last_locked_node = current_node;
     achelp_info.last_locked_node_parent = prev_node; 
     if(contended){
-      achelp_info.last_locked_node->baseOrRoute.base.lock.statistics += AACSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
+      //achelp_info.last_locked_node->baseOrRoute.base.lock.statistics += AACSLCATREE_LOCK_FAILURE_STATS_CONTRIB;
       int current_stack_pos = 0;
       while(current_stack_pos < SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE &&
 	    current_stack_pos < achelp_info.flush_stack_pos){
