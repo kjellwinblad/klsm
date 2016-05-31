@@ -94,7 +94,7 @@ struct edge_t {
 struct vertex_t {
     size_t num_edges;
     std::atomic<size_t> distance;
-    bool processed;
+  //bool processed;
     edge_t *edges;
 };
 
@@ -142,7 +142,7 @@ read_graph(std::string file_path,
     for(size_t i = 0; i < n; i++){
         data[i].num_edges = 0;
         data[i].distance.store(std::numeric_limits<size_t>::max(), std::memory_order_relaxed );
-        data[i].processed = false;
+        //data[i].processed = false;
         data[i].edges = NULL;
     }
     for(size_t i = 0; i < n; i++){
@@ -283,7 +283,7 @@ bench_thread(T *pq,
         size_t node;
         if (!pq->delete_min(distance, node)) {
             bool success = false;
-            for(int i = 0 ; i < 100; i++){
+            for(int i = 0 ; i < 400; i++){
                 if (pq->delete_min(distance, node)){
                     success = true;
                     break;
@@ -313,16 +313,16 @@ bench_thread(T *pq,
             /*Dead node... ignore*/
             continue;
         }
-        if(record_processed){
-            if(v->processed){
-                std::cerr << "SHOULD NOT HAPPEN!!! " // << w_dist << " " << new_dist <<" "<<e->weight 
-                          << std::endl;
-                pq->signal_waste();
-            }else{
-                v->processed = true;
-                pq->signal_no_waste();
-            }
-        }
+        // if(record_processed){
+        //     if(v->processed){
+        //         std::cerr << "SHOULD NOT HAPPEN!!! " // << w_dist << " " << new_dist <<" "<<e->weight 
+        //                   << std::endl;
+        //         pq->signal_waste();
+        //     }else{
+        //         v->processed = true;
+        //         pq->signal_no_waste();
+        //     }
+        // }
         //std::cout << "process " << node << "\n";
         for (size_t i = 0; i < v->num_edges; i++) {
             const edge_t *e = &v->edges[i];

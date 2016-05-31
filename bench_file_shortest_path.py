@@ -1,8 +1,8 @@
 import sys
 import subprocess
-THREAD_COUNTS=[1,2,4,8,16,32,63,64]
+THREAD_COUNTS=[1,2,4,8,16,32,64]
 EDGE_WEIGHT_RANGES=[0,100,10000,1000000]
-GRAPH_FILES=[("com-orkut.ungraph.txt", "orkut"), ("grid1000_undir.txt", "undirgrid"), ("roadNet-CA.txt", "roadnet"),  ("soc-LiveJournal1.txt","live")]
+GRAPH_FILES=[("roadNet-CA.txt", "roadnet"),("soc-LiveJournal1.txt","live"), ("com-orkut.ungraph.txt", "orkut"), ("grid1000_undir.txt", "undirgrid")]
 post_fix = sys.argv[1]
 data_structure = sys.argv[2]
 
@@ -20,12 +20,20 @@ for (graph_file, graph_file_name) in GRAPH_FILES:
         for thread_count in THREAD_COUNTS:
             command = ["build/src/bench/file_shortest_paths", "-n", str(thread_count), "-i", graph_file,  "-o", "output_to_check"] + edge_weight_argument + [data_structure]
             print("running command: " + " ".join(command))
-            output = subprocess.check_output(command).decode("utf-8") 
-            print("output: " + str(output))
-            diff_output = subprocess.check_output(["diff", "model_output", "output_to_check"]).decode("utf-8")
-            if(diff_output != ""):
+            output = "9999999"
+            was_error = False
+            try:
+                output = subprocess.check_output(command).decode("utf-8") 
+                print("output: " + str(output))
+                diff_output = subprocess.check_output(["diff", "model_output", "output_to_check"], timeout=600).decode("utf-8")
+                if(diff_output != ""):
+                    print("DIFF NO CRASH")
+                    was_error = True
+            except:
+                was_error = True
+            if was_error:
                 print("DIFF FROM MODEL")
-                result_output.write(str(thread_count) + " error!")
-                sys.exit(1)
-            result_output.write(str(thread_count) + " " + str(output))
+                result_output.write(str(thread_count) + " 9999999")
+            else:
+                result_output.write(str(thread_count) + " " + str(output))
         result_output.close()
