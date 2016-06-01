@@ -60,14 +60,17 @@ target_include_directories(spraylist PUBLIC
 
 add_library(qdcatree STATIC
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_qdcatree_set.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_fpaqdcatree_set.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_cachedqdcatree_set.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_adaptivecachedqdcatree_set.c
+    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_fpaqdcatree_set.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/feseq_skiplist.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/qd_lock.c
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/tatas_lock.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist2/gc/gc.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist2/gc/ptst.c
     qdcatree.cpp
+    fpaqdcatree.cpp
     cachedqdcatree.cpp
     adaptivecachedqdcatree.cpp
 )

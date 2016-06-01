@@ -33,6 +33,7 @@
 #include "pqs/linden.h"
 #include "pqs/qdcatree.h"
 #include "pqs/cachedqdcatree.h"
+#include "pqs/fpaqdcatree.h"
 #include "pqs/adaptivecachedqdcatree.h"
 #include "pqs/spraylist.h"
 #include "dist_lsm/dist_lsm.h"
@@ -56,6 +57,7 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_LINDEN     "linden"
 #define PQ_SPRAYLIST  "spraylist"
 #define PQ_QDCATREE   "qdcatree"
+#define PQ_FPAQDCATREE "fpaqdcatree"
 #define PQ_RELAXED_QDCATREE "relaxedqdcatree"
 #define PQ_ADAPTIVE_RELAXED_QDCATREE "adaptiverelaxedqdcatree"
 /* Hack to support graphs that are badly formatted */
@@ -250,7 +252,8 @@ bench_thread(T *pq,
              const int thread_id,
              vertex_t *graph)
 {
-    bool record_processed = false;
+    (void)thread_id;
+    //bool record_processed = false;
 #ifdef MANUAL_PINNING
     int cpu = 4*(thread_id%16) + thread_id/16;
     cpu_set_t cpuset;
@@ -308,7 +311,7 @@ bench_thread(T *pq,
         // }
         vertex_t *v = &graph[node];
         const size_t v_dist = v->distance.load(std::memory_order_relaxed);
-
+        //std::cout << "removed key " << distance << "node" << node << "t"<< thread_id<< std::flush<< std::endl;
         if (distance > v_dist) {
             /*Dead node... ignore*/
             continue;
@@ -348,6 +351,7 @@ bench_thread(T *pq,
             } while (!dist_updated && w_dist > new_dist);
 
             if (dist_updated) {
+                //std::cout << "insert" << new_dist << std::endl;
                 pq->insert(new_dist, e->target);
             }
         }
@@ -512,7 +516,10 @@ main(int argc,
     } else if (s.type == PQ_QDCATREE) {
         kpqbench::QDCATree pq;
         ret = bench(&pq, s);
-    } else if (s.type == PQ_RELAXED_QDCATREE) {
+    } else if (s.type == PQ_FPAQDCATREE) {
+        kpqbench::FPAQDCATree pq;
+        ret = bench(&pq, s);
+    }else if (s.type == PQ_RELAXED_QDCATREE) {
         kpqbench::CachedQDCATree pq;
         /*Insert too many start nodes may result in some
           wasted work but is still correct*/
