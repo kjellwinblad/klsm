@@ -15,28 +15,14 @@
  * ========================
  */
 
-//Max 255
-#define SKIPLIST_MAX_VALUSES_IN_NODE 64
+
 
 #define SKIPLIST_NORMAL_NODE 1
 #define SKIPLIST_LEFT_BORDER_NODE 1 << 2
 #define SKIPLIST_RIGHT_BORDER_NODE 1 << 1
 
 
-typedef struct key_value_item {
-    unsigned long key;
-    unsigned long value;
-} KeyValueItem;
 
-typedef struct skiplist_node {
-    //contains information about if it is a boarder point
-    unsigned char info;
-    unsigned char num_of_levels;
-    unsigned char first_key_value_pos;
-    unsigned long max_key;
-    KeyValueItem * key_values; //Points to region after lower_lists
-    struct skiplist_node * lower_lists[];    
-} SkiplistNode;
 
 typedef struct skiplist {
     SkiplistNode head_node;
@@ -354,6 +340,37 @@ unsigned long skiplist_remove_min(Skiplist * skiplist, unsigned long * key_write
     }
 }
 
+
+SkiplistNode * skiplist_remove_head_nodes(Skiplist * skiplist, int number_of_nodes){
+    SkiplistNode * head_node = &(skiplist->head_node);
+    SkiplistNode * firstCandidate = 
+        head_node->lower_lists[head_node->num_of_levels - 1];
+    if(firstCandidate->info & SKIPLIST_RIGHT_BORDER_NODE){
+        return NULL;
+    } else {
+        SkiplistNode * current_last_node = firstCandidate;
+        SkiplistNode * prev_last_node;
+        int current_number_of_nodes_fetched = 1;
+        do{
+            int remove_level;
+            int remove_from_level =
+                SKIPLIST_NUM_OF_LEVELS - current_last_node->num_of_levels;
+            for(remove_level = remove_from_level; remove_level < head_node->num_of_levels; remove_level++){
+                if(head_node->lower_lists[remove_level] == current_last_node)
+                    set_next_at_level(head_node,
+                                      current_last_node->lower_lists[remove_level - remove_from_level],
+                                      remove_level);
+            }
+            prev_last_node = current_last_node;
+            current_last_node = current_last_node->lower_lists[current_last_node->num_of_levels - 1];
+            current_number_of_nodes_fetched++;
+        }while(current_number_of_nodes_fetched < number_of_nodes &&
+               current_last_node->info & SKIPLIST_RIGHT_BORDER_NODE != 1);
+        prev_last_node->lower_lists[prev_last_node->num_of_levels - 1] = NULL;
+        return firstCandidate;
+    }
+}
+
 static inline
 void skiplist_insert_into_non_full_node(SkiplistNode * node, unsigned long key, unsigned long value){
     unsigned int current_pos = node->first_key_value_pos -1;
@@ -641,7 +658,6 @@ Skiplist * new_skiplist(){
         create_skiplist_node(SKIPLIST_NUM_OF_LEVELS);
 
     SkiplistNode* leftmost_skiplist = (SkiplistNode*)&(skiplist->head_node);  
-
     leftmost_skiplist->num_of_levels = SKIPLIST_NUM_OF_LEVELS;
     
     for(int i = 0 ; i < SKIPLIST_NUM_OF_LEVELS ; i++){
