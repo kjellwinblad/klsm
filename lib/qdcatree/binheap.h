@@ -46,6 +46,7 @@ bool pop (heap_t *h, unsigned long *key, unsigned long *value) {
     if (!h->len) {
         return false;
     }
+    h->size--;
     *key = h->nodes[1].key;
     *value = h->nodes[1].value;
     h->nodes[1] = h->nodes[h->len];

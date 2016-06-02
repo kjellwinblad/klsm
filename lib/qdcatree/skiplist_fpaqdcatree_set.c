@@ -86,6 +86,8 @@ typedef struct {
     int flush_stack_pos;
     CATreeBaseOrRouteNode * flush_stack[SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE];
     SkiplistNode * del_min_buffer;
+    int put_contention;
+    int max_buffered_puts;
     heap_t put_buffer;
     char pad2[128];
 } fpahelp_info_type;
@@ -93,6 +95,8 @@ typedef struct {
 _Alignas(CACHE_LINE_SIZE)
 __thread fpahelp_info_type fpahelp_info = {.flush_stack_pos = 0,
                                            .del_min_buffer=NULL,
+                                           .put_contention=0,
+                                           .max_buffered_puts=0,
                                            .put_buffer.len = 0,
                                            .put_buffer.size = 0};
 /*
@@ -138,7 +142,7 @@ bool remove_min_from_smallest_buffer(unsigned long *key_write_back, unsigned lon
                 return pop(&fpahelp_info.put_buffer, key_write_back, val);
             }
         }else{
-            return false; //we don't want to delete from put buffer if we don't have any indication that it might be up to date
+            return pop(&fpahelp_info.put_buffer, key_write_back, val);
         }
     }else{
         return remove_min_from_del_min_buffer(key_write_back, val);
@@ -795,6 +799,23 @@ static inline void delegate_perform_remove_min_with_lock(unsigned int msgSize, v
  * Public interface
  *=================
  */
+#define MAX_PUT_BUFFER_SIZE 1024
+
+static inline void adjust_put_buffer(){
+    //Both buffers are empty reset put buffer and check if tresholds for put buffer limits are reached
+    if(fpahelp_info.put_contention > 10){
+        fpahelp_info.put_contention = 0;
+        if(fpahelp_info.max_buffered_puts < MAX_PUT_BUFFER_SIZE){
+            fpahelp_info.max_buffered_puts++;
+        }
+    }else if (fpahelp_info.put_contention < 10){
+        fpahelp_info.put_contention =0;
+        if(fpahelp_info.max_buffered_puts > 0){
+            fpahelp_info.max_buffered_puts--;
+        }
+    }
+    fpahelp_info.put_buffer.size = fpahelp_info.max_buffered_puts;
+}
 
 unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_write_back){
     unsigned long val;
@@ -859,6 +880,7 @@ unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_w
             }
             atomic_store_explicit(&fpadelete_min_write_back_mem.response, -1, memory_order_relaxed);
             critical_exit();
+            adjust_put_buffer();
             return val;
         }
     } while(retry);
@@ -913,6 +935,7 @@ unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_w
                    fpahelp_info.last_locked_node,
                    fpahelp_info.last_locked_node_parent);
     critical_exit();
+    adjust_put_buffer();
     return val;
 }
 
@@ -930,6 +953,10 @@ static inline void delegate_perform_put_with_lock(unsigned int msgSize, void * m
 void fpaslqdcatree_put(FPACATreeSet * set,
                     unsigned long key,
                     unsigned long value){
+    if(push(&fpahelp_info.put_buffer, key, value)){
+        //printf("%d ", fpahelp_info.max_buffered_puts);
+        return;
+    }
     critical_enter();
     //Find base node
     CATreeBaseOrRouteNode * currentNode;
@@ -977,6 +1004,7 @@ void fpaslqdcatree_put(FPACATreeSet * set,
                                  buff,
                                  delegate_perform_put_with_lock);
         critical_exit();
+        fpahelp_info.put_contention++;
         return;
     }
     if(contended){
@@ -985,8 +1013,10 @@ void fpaslqdcatree_put(FPACATreeSet * set,
       LL_open_delegation_queue(&node->lock.lock);
       fpahelp_info.flush_stack[fpahelp_info.flush_stack_pos] = currentNode;
       fpahelp_info.flush_stack_pos++;
+      fpahelp_info.put_contention++;
     }else{
       fpahelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
+      fpahelp_info.put_contention--;
     }
     fpahelp_info.set = set;
     fpahelp_info.current_help_node = currentNode;
