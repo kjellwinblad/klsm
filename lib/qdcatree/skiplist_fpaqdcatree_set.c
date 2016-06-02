@@ -800,21 +800,25 @@ static inline void delegate_perform_remove_min_with_lock(unsigned int msgSize, v
  *=================
  */
 #define MAX_PUT_BUFFER_SIZE 1024
-
+#define PUT_BUFF_INCREASE_VALUE 10
+#define PUT_BUFF_DECREASE_VALUE 1
 static inline void adjust_put_buffer(){
     //Both buffers are empty reset put buffer and check if tresholds for put buffer limits are reached
-    if(fpahelp_info.put_contention > 10){
+    if(fpahelp_info.put_contention > 100){
         fpahelp_info.put_contention = 0;
-        if(fpahelp_info.max_buffered_puts < MAX_PUT_BUFFER_SIZE){
-            fpahelp_info.max_buffered_puts++;
+        if(fpahelp_info.max_buffered_puts < (MAX_PUT_BUFFER_SIZE-10)){
+            fpahelp_info.max_buffered_puts = fpahelp_info.max_buffered_puts + 10;
+            //printf("%d ", fpahelp_info.max_buffered_puts);
         }
-    }else if (fpahelp_info.put_contention < 10){
+    }else if (fpahelp_info.put_contention < -10){
         fpahelp_info.put_contention =0;
         if(fpahelp_info.max_buffered_puts > 0){
-            fpahelp_info.max_buffered_puts--;
+            fpahelp_info.max_buffered_puts = fpahelp_info.max_buffered_puts-PUT_BUFF_DECREASE_VALUE;
+            //printf("%d ", fpahelp_info.max_buffered_puts);
         }
     }
     fpahelp_info.put_buffer.size = fpahelp_info.max_buffered_puts;
+
 }
 
 unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_write_back){
