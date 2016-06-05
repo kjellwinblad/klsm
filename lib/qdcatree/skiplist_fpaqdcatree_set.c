@@ -85,6 +85,7 @@ typedef struct {
     CATreeBaseOrRouteNode * last_locked_node_parent;
     int flush_stack_pos;
     CATreeBaseOrRouteNode * flush_stack[SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE];
+    int remove_min_contention;
     SkiplistNode * del_min_buffer;
     int put_contention;
     int max_buffered_puts;
@@ -94,6 +95,7 @@ typedef struct {
 
 _Alignas(CACHE_LINE_SIZE)
 __thread fpahelp_info_type fpahelp_info = {.flush_stack_pos = 0,
+					   .remove_min_contention=0,
                                            .del_min_buffer=NULL,
                                            .put_contention=0,
                                            .max_buffered_puts=0,
@@ -240,7 +242,7 @@ void plain_slcatree_set_init(FPACATreeSet * set){
     gc_id = gc_add_allocator(sizeof(CATreeBaseOrRouteNode));
     critical_enter();
     set->root = allocate_base_node(new_skiplist());
-    set->relaxation = 1;
+    set->relaxation = 0;
     critical_exit();
 }
 
@@ -799,18 +801,51 @@ static inline void delegate_perform_remove_min_with_lock(unsigned int msgSize, v
  * Public interface
  *=================
  */
-#define MAX_PUT_BUFFER_SIZE 1024
+#define MAX_PUT_BUFFER_SIZE 500
 #define PUT_BUFF_INCREASE_VALUE 500
 #define PUT_BUFF_DECREASE_VALUE 1
+#define PUT_BUFF_LOW_CONTENTION_ADATION_LIMIT -100
+#define PUT_BUFF_HIGH_CONTENTION_ADATION_LIMIT 100
+#define PUT_BUFF_HIGH_CONTENTION_INCREASE 2
+#define PUT_BUFF_LOW_CONTENTION_DECREASE 1
+
+
+#define MAX_REMOVE_MIN_RELAXATION_SIZE 1
+#define REMOVE_MIN_INCREASE_VALUE 1
+#define REMOVE_MIN_DECREASE_VALUE 1
+#define REMOVE_MIN_LOW_CONTENTION_ADATION_LIMIT -1000
+#define REMOVE_MIN_HIGH_CONTENTION_ADATION_LIMIT 1000
+#define REMOVE_MIN_HIGH_CONTENTION_INCREASE 250
+#define REMOVE_MIN_LOW_CONTENTION_DECREASE 1
+
+static inline void adjust_remove_min_relaxation(){
+    //Both buffers are empty reset put buffer and check if tresholds for put buffer limits are reached
+    if(fpahelp_info.remove_min_contention > REMOVE_MIN_HIGH_CONTENTION_ADATION_LIMIT){
+        fpahelp_info.remove_min_contention = 0;
+        if(fpahelp_info.set->relaxation < MAX_REMOVE_MIN_RELAXATION_SIZE){
+	  fpahelp_info.set->relaxation += REMOVE_MIN_INCREASE_VALUE;
+	  //fpahelp_info.max_buffered_puts +
+	  //printf("%d ", fpahelp_info.set->relaxation);
+	}
+    }else if (fpahelp_info.remove_min_contention < REMOVE_MIN_LOW_CONTENTION_ADATION_LIMIT){
+        fpahelp_info.remove_min_contention =0;
+        if(fpahelp_info.set->relaxation > 0){
+            fpahelp_info.set->relaxation = fpahelp_info.set->relaxation-REMOVE_MIN_DECREASE_VALUE;
+	    //printf("%d ", fpahelp_info.set->relaxation);
+        }
+    }
+}
+
 static inline void adjust_put_buffer(){
     //Both buffers are empty reset put buffer and check if tresholds for put buffer limits are reached
-    if(fpahelp_info.put_contention > 10){
+    if(fpahelp_info.put_contention > PUT_BUFF_HIGH_CONTENTION_ADATION_LIMIT){
         fpahelp_info.put_contention = 0;
-        if(fpahelp_info.max_buffered_puts < (MAX_PUT_BUFFER_SIZE-PUT_BUFF_INCREASE_VALUE)){
-            fpahelp_info.max_buffered_puts = fpahelp_info.max_buffered_puts + PUT_BUFF_INCREASE_VALUE;
-            //printf("%d ", fpahelp_info.max_buffered_puts);
-        }
-    }else if (fpahelp_info.put_contention < -10){
+        //if(fpahelp_info.max_buffered_puts < (MAX_PUT_BUFFER_SIZE-PUT_BUFF_INCREASE_VALUE)){
+	fpahelp_info.max_buffered_puts = PUT_BUFF_INCREASE_VALUE;
+	//fpahelp_info.max_buffered_puts +
+	//printf("%d ", fpahelp_info.max_buffered_puts);
+	    //}
+    }else if (fpahelp_info.put_contention < PUT_BUFF_LOW_CONTENTION_ADATION_LIMIT){
         fpahelp_info.put_contention =0;
         if(fpahelp_info.max_buffered_puts > 0){
             fpahelp_info.max_buffered_puts = fpahelp_info.max_buffered_puts-PUT_BUFF_DECREASE_VALUE;
@@ -884,6 +919,7 @@ unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_w
             }
             atomic_store_explicit(&fpadelete_min_write_back_mem.response, -1, memory_order_relaxed);
             critical_exit();
+	    fpahelp_info.remove_min_contention+=REMOVE_MIN_HIGH_CONTENTION_INCREASE;
             adjust_put_buffer();
             return val;
         }
@@ -915,8 +951,10 @@ unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_w
 	  LL_unlock(&n->lock.lock);
 	}
       }
+      fpahelp_info.remove_min_contention+=REMOVE_MIN_HIGH_CONTENTION_INCREASE;
     }else{
       fpahelp_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
+      fpahelp_info.remove_min_contention-=REMOVE_MIN_LOW_CONTENTION_DECREASE;
     }
       /* if(fpahelp_info.last_locked_node != fpahelp_info.current_help_node){ */
       /*   DEBUG_PRINT(("not same as last node min unlock %p\n", current_node)); */
@@ -935,6 +973,7 @@ unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_w
     }
     atomic_store_explicit(&fpadelete_min_write_back_mem.response, -1, memory_order_relaxed);
     fpahelp_info.flush_stack_pos = 0;
+    adjust_remove_min_relaxation();
     adaptAndUnlock(set,
                    fpahelp_info.last_locked_node,
                    fpahelp_info.last_locked_node_parent);
@@ -1008,7 +1047,7 @@ void fpaslqdcatree_put(FPACATreeSet * set,
                                  buff,
                                  delegate_perform_put_with_lock);
         critical_exit();
-        fpahelp_info.put_contention++;
+        fpahelp_info.put_contention+=PUT_BUFF_HIGH_CONTENTION_INCREASE;
         return;
     }
     if(contended){
@@ -1017,10 +1056,10 @@ void fpaslqdcatree_put(FPACATreeSet * set,
       LL_open_delegation_queue(&node->lock.lock);
       fpahelp_info.flush_stack[fpahelp_info.flush_stack_pos] = currentNode;
       fpahelp_info.flush_stack_pos++;
-      fpahelp_info.put_contention++;
+      fpahelp_info.put_contention+=PUT_BUFF_HIGH_CONTENTION_INCREASE;
     }else{
       fpahelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
-      fpahelp_info.put_contention--;
+      fpahelp_info.put_contention-=PUT_BUFF_LOW_CONTENTION_DECREASE;
     }
     fpahelp_info.set = set;
     fpahelp_info.current_help_node = currentNode;

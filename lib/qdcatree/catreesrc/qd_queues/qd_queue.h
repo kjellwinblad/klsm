@@ -14,6 +14,7 @@
 
 #ifndef QD_QUEUE_BUFFER_SIZE
 #define QD_QUEUE_BUFFER_SIZE 8192
+//4096
 //(1024 + 512)
 #endif
 #define QD_QUEUE_EMPTY_POS 1
