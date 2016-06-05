@@ -9,6 +9,7 @@ namespace kpqbench
 
 struct fpaqdcatree_t;
 
+template <bool remove_min_relax = true, bool put_relax = true, bool catree_adapt = true>
 class FPAQDCATree
 {
 public:
@@ -31,6 +32,7 @@ private:
     fpaqdcatree_t *m_q;
 };
 
+#include "fpaqdcatree_inl.h"
 }
 
 #endif /* __FPAQDCATREE_H */

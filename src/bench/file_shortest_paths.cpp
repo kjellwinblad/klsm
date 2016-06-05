@@ -52,12 +52,19 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_KLSM16     "klsm16"
 #define PQ_KLSM128    "klsm128"
 #define PQ_KLSM256    "klsm256"
+#define PQ_KLSM2048    "klsm2048"
 #define PQ_KLSM4096   "klsm4096"
-#define PQ_MULTIQ     "multiq"
+#define PQ_KLSM8192   "klsm8192"
+#define PQ_MULTIQC2     "multiqC2"
+#define PQ_MULTIQC4     "multiqC4"
+#define PQ_MULTIQC8     "multiqC8"
 #define PQ_LINDEN     "linden"
 #define PQ_SPRAYLIST  "spraylist"
 #define PQ_QDCATREE   "qdcatree"
 #define PQ_FPAQDCATREE "fpaqdcatree"
+#define PQ_FPAQDCATREENOPUTADAPT "fpaqdcatreenoputadapt"
+#define PQ_FPAQDCATREENORMMINADAPT "fpaqdcatreenormminadapt"
+#define PQ_FPAQDCATREENOCATREEADAPT "fpaqdcatreenocatreeadapt"
 #define PQ_RELAXED_QDCATREE "relaxedqdcatree"
 #define PQ_ADAPTIVE_RELAXED_QDCATREE "adaptiverelaxedqdcatree"
 /* Hack to support graphs that are badly formatted */
@@ -116,7 +123,7 @@ usage()
             DEFAULT_NTHREADS,
             DEFAULT_SEED,
             DEFAULT_OUTPUT_FILE.c_str(),
-            PQ_DLSM, PQ_GLOBALLOCK, PQ_KLSM, PQ_MULTIQ);
+            PQ_DLSM, PQ_GLOBALLOCK, PQ_KLSM, PQ_MULTIQC2);
     exit(EXIT_FAILURE);
 }
 
@@ -250,9 +257,11 @@ static void
 bench_thread(T *pq,
              const int number_of_threads,
              const int thread_id,
-             vertex_t *graph)
+             vertex_t *graph,
+             unsigned long *nodes_processed_writeback)
 {
     (void)thread_id;
+    unsigned long nodes_processed = 0;
     //bool record_processed = false;
 #ifdef MANUAL_PINNING
     int cpu = 4*(thread_id%16) + thread_id/16;
@@ -316,6 +325,7 @@ bench_thread(T *pq,
             /*Dead node... ignore*/
             continue;
         }
+        nodes_processed++;
         // if(record_processed){
         //     if(v->processed){
         //         std::cerr << "SHOULD NOT HAPPEN!!! " // << w_dist << " " << new_dist <<" "<<e->weight 
@@ -356,6 +366,7 @@ bench_thread(T *pq,
             }
         }
     }
+    *nodes_processed_writeback = nodes_processed;
 }
 
 template <class T>
@@ -386,9 +397,16 @@ bench(T *pq,
     /* Start all threads. */
 
     std::vector<std::thread> threads(settings.num_threads);
+    size_t * number_of_nodes_processed_for_thread =
+        new size_t [settings.num_threads];
     wt.threads_waiting_to_succeed = 0;
     for (int i = 0; i < settings.num_threads; i++) {
-        threads[i] = std::thread(bench_thread<T>, pq, settings.num_threads, i, graph);
+        threads[i] = std::thread(bench_thread<T>,
+                                 pq,
+                                 settings.num_threads,
+                                 i,
+                                 graph,
+                                 &number_of_nodes_processed_for_thread[i]);
     }
 
     /* Begin benchmark. */
@@ -401,6 +419,15 @@ bench(T *pq,
         thread.join();
     }
 
+    size_t total_number_of_nodes_processed = 0;
+
+    for (int i = 0; i < settings.num_threads; i++) {
+        total_number_of_nodes_processed =
+            total_number_of_nodes_processed +
+            number_of_nodes_processed_for_thread[i];
+    }
+    delete[] number_of_nodes_processed_for_thread;
+    
     clock_gettime(CLOCK_MONOTONIC, &end);
     /* End benchmark. */
 
@@ -410,7 +437,7 @@ bench(T *pq,
                 settings.output_file);
     
     const double elapsed = timediff_in_s(start, end);
-    fprintf(stdout, "%f\n", elapsed);
+    fprintf(stdout, "%f %lu\n", elapsed, total_number_of_nodes_processed);
 
     delete_graph(graph, number_of_nodes);
     return ret;
@@ -498,14 +525,26 @@ main(int argc,
     } else if (s.type == PQ_KLSM256) {
          kpq::k_lsm<size_t, size_t, 256> pq;
          ret = bench(&pq, s);
-    }  else if (s.type == PQ_KLSM4096) {
+    } else if (s.type == PQ_KLSM2048) {
+         kpq::k_lsm<size_t, size_t, 2048> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_KLSM4096) {
          kpq::k_lsm<size_t, size_t, 4096> pq;
          ret = bench(&pq, s);
-    } else if (s.type == PQ_GLOBALLOCK) {
+    } else if (s.type == PQ_KLSM8192) {
+         kpq::k_lsm<size_t, size_t, 8192> pq;
+         ret = bench(&pq, s);
+    }else if (s.type == PQ_GLOBALLOCK) {
          kpqbench::GlobalLock<size_t, size_t> pq;
          ret = bench(&pq, s);
-    } else if (s.type == PQ_MULTIQ) {
-        kpqbench::multiq<size_t, size_t> pq(s.num_threads);
+    } else if (s.type == PQ_MULTIQC2) {
+        kpqbench::multiq<size_t, size_t, 2> pq(s.num_threads);
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_MULTIQC4) {
+        kpqbench::multiq<size_t, size_t, 4> pq(s.num_threads);
+        ret = bench(&pq, s);
+    }  else if (s.type == PQ_MULTIQC8) {
+        kpqbench::multiq<size_t, size_t, 8> pq(s.num_threads);
         ret = bench(&pq, s);
     } else if (s.type == PQ_SPRAYLIST) {
         kpqbench::spraylist pq;
@@ -517,9 +556,18 @@ main(int argc,
         kpqbench::QDCATree pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_FPAQDCATREE) {
-        kpqbench::FPAQDCATree pq;
+        kpqbench::FPAQDCATree<true,true,true> pq;
         ret = bench(&pq, s);
-    }else if (s.type == PQ_RELAXED_QDCATREE) {
+    }  else if (s.type == PQ_FPAQDCATREENOPUTADAPT) {
+        kpqbench::FPAQDCATree<true,false,true> pq;
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_FPAQDCATREENORMMINADAPT) {
+        kpqbench::FPAQDCATree<false,true,true> pq;
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_FPAQDCATREENOCATREEADAPT) {
+        kpqbench::FPAQDCATree<true,true,false> pq;
+        ret = bench(&pq, s);
+    } else if (s.type == PQ_RELAXED_QDCATREE) {
         kpqbench::CachedQDCATree pq;
         /*Insert too many start nodes may result in some
           wasted work but is still correct*/

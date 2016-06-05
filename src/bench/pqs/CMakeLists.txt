@@ -70,7 +70,6 @@ add_library(qdcatree STATIC
     ${CMAKE_SOURCE_DIR}/lib/spraylist2/gc/gc.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist2/gc/ptst.c
     qdcatree.cpp
-    fpaqdcatree.cpp
     cachedqdcatree.cpp
     adaptivecachedqdcatree.cpp
 )

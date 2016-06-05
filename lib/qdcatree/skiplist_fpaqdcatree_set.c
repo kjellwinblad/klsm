@@ -688,7 +688,8 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
 
 static inline void adaptAndUnlock(FPACATreeSet * set,
                                   CATreeBaseOrRouteNode * currentNode,
-                                  CATreeBaseOrRouteNode * prevNode){
+                                  CATreeBaseOrRouteNode * prevNode,
+                                  bool catree_adapt){
     CATreeBaseNode * node = &currentNode->baseOrRoute.base;
     CATreeLock * lock = &node->lock;
 #ifndef NO_CA_TREE_ADAPTION
@@ -706,7 +707,7 @@ static inline void adaptAndUnlock(FPACATreeSet * set,
     } else if(lock->statistics < SLCATREE_MIN_CONTENTION_STATISTICS){
         low_contention = true;
     }
-    if(high_contention || low_contention){
+    if(catree_adapt && high_contention || low_contention){
         if(currentCATreeRouteNode == NULL){
             parent = (void**)&set->root;
         }else if(currentCATreeRouteNode->left == currentNode){
@@ -856,7 +857,11 @@ static inline void adjust_put_buffer(){
 
 }
 
-unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_write_back){
+unsigned long fpaslqdcatree_remove_min_param(FPACATreeSet * set,
+                                             unsigned long * key_write_back,
+                                             bool remove_min_relax,
+                                             bool put_relax,
+                                             bool catree_adapt){
     unsigned long val;
     //try with buffers first
     if(remove_min_from_smallest_buffer(key_write_back, &val)){
@@ -920,7 +925,9 @@ unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_w
             atomic_store_explicit(&fpadelete_min_write_back_mem.response, -1, memory_order_relaxed);
             critical_exit();
 	    fpahelp_info.remove_min_contention+=REMOVE_MIN_HIGH_CONTENTION_INCREASE;
-            adjust_put_buffer();
+            if(put_relax){
+                adjust_put_buffer();
+            }
             return val;
         }
     } while(retry);
@@ -973,13 +980,27 @@ unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set, unsigned long * key_w
     }
     atomic_store_explicit(&fpadelete_min_write_back_mem.response, -1, memory_order_relaxed);
     fpahelp_info.flush_stack_pos = 0;
-    adjust_remove_min_relaxation();
+    if(remove_min_relax){
+        adjust_remove_min_relaxation();
+    }
     adaptAndUnlock(set,
                    fpahelp_info.last_locked_node,
-                   fpahelp_info.last_locked_node_parent);
+                   fpahelp_info.last_locked_node_parent,
+                   catree_adapt);
     critical_exit();
-    adjust_put_buffer();
+    if(put_relax){
+        adjust_put_buffer();
+    }
     return val;
+}
+
+unsigned long fpaslqdcatree_remove_min(FPACATreeSet * set,
+                                             unsigned long * key_write_back){
+    return fpaslqdcatree_remove_min_param(set,
+                                          key_write_back,
+                                          true,
+                                          true,
+                                          true);
 }
 
 typedef struct {
@@ -993,9 +1014,10 @@ static inline void delegate_perform_put_with_lock(unsigned int msgSize, void * m
     fpahelp_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_FAILURE_STATS_CONTRIB;
 }
 
-void fpaslqdcatree_put(FPACATreeSet * set,
-                    unsigned long key,
-                    unsigned long value){
+void fpaslqdcatree_put_param(FPACATreeSet * set,
+                             unsigned long key,
+                             unsigned long value,
+                             bool catree_adapt){
     if(push(&fpahelp_info.put_buffer, key, value)){
         //printf("%d ", fpahelp_info.max_buffered_puts);
         return;
@@ -1091,11 +1113,21 @@ void fpaslqdcatree_put(FPACATreeSet * set,
     fpahelp_info.flush_stack_pos = 0;    
     adaptAndUnlock(set,
                    fpahelp_info.last_locked_node,
-                   fpahelp_info.last_locked_node_parent);
+                   fpahelp_info.last_locked_node_parent,
+                   catree_adapt);
     critical_exit();
     return;
 }
 
+
+void fpaslqdcatree_put(FPACATreeSet * set,
+                       unsigned long key,
+                       unsigned long value){
+    fpaslqdcatree_put_param(set,
+                            key,
+                            value,
+                            true);
+}
 
 void fpaslqdcatree_delete(FPACATreeSet * setParam){
     slcatree_set_destroy(setParam);
