@@ -55,9 +55,11 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_KLSM2048    "klsm2048"
 #define PQ_KLSM4096   "klsm4096"
 #define PQ_KLSM8192   "klsm8192"
+#define PQ_KLSM16384   "klsm16384"
 #define PQ_MULTIQC2     "multiqC2"
 #define PQ_MULTIQC4     "multiqC4"
 #define PQ_MULTIQC8     "multiqC8"
+#define PQ_MULTIQC16     "multiqC16"
 #define PQ_LINDEN     "linden"
 #define PQ_SPRAYLIST  "spraylist"
 #define PQ_QDCATREE   "qdcatree"
@@ -534,7 +536,10 @@ main(int argc,
     } else if (s.type == PQ_KLSM8192) {
          kpq::k_lsm<size_t, size_t, 8192> pq;
          ret = bench(&pq, s);
-    }else if (s.type == PQ_GLOBALLOCK) {
+    } else if (s.type == PQ_KLSM16384) {
+         kpq::k_lsm<size_t, size_t, 16384> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_GLOBALLOCK) {
          kpqbench::GlobalLock<size_t, size_t> pq;
          ret = bench(&pq, s);
     } else if (s.type == PQ_MULTIQC2) {
@@ -543,10 +548,13 @@ main(int argc,
     } else if (s.type == PQ_MULTIQC4) {
         kpqbench::multiq<size_t, size_t, 4> pq(s.num_threads);
         ret = bench(&pq, s);
-    }  else if (s.type == PQ_MULTIQC8) {
+    } else if (s.type == PQ_MULTIQC8) {
         kpqbench::multiq<size_t, size_t, 8> pq(s.num_threads);
         ret = bench(&pq, s);
-    } else if (s.type == PQ_SPRAYLIST) {
+    } else if (s.type == PQ_MULTIQC16) {
+        kpqbench::multiq<size_t, size_t, 16> pq(s.num_threads);
+        ret = bench(&pq, s);
+    }else if (s.type == PQ_SPRAYLIST) {
         kpqbench::spraylist pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_LINDEN) {

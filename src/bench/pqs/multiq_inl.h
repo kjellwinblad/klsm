@@ -41,7 +41,7 @@ bool
     /* Peek at two random queues and lock the one with the minimal item. */
     const int nqueues = num_queues();
     size_t i, j;
-    int retry_count = 25;
+    int retry_count = 25*C;
  delete_min_start_label:
     while (true) {
         do {

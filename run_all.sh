@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for DATASTRUCTURE in adaptiverelaxedqdcatree multiq relaxedqdcatree qdcatree spraylist linden globallock dlsm klsm klsm16 klsm128 klsm256 klsm4096
+for DATASTRUCTURE in linden spraylist qdcatree fpaqdcatree fpaqdcatreenoputadapt fpaqdcatreenormminadapt fpaqdcatreenocatreeadapt klsm2048 klsm4096 klsm8192 klsm16384 multiqC2 multiqC4 multiqC8 multiqC16
 do
 	python3.4 bench_file_shortest_path.py 1 $DATASTRUCTURE
 done
