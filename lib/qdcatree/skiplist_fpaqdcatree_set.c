@@ -915,11 +915,9 @@ unsigned long fpaslqdcatree_remove_min_param(FPACATreeSet * set,
             if(response == 0){
                 *key_write_back = fpadelete_min_write_back_mem.key;
                 val = fpadelete_min_write_back_mem.value;
-                fpahelp_info.put_buffer.size = 0;
             }else{
                 // node response
                 fpahelp_info.del_min_buffer = (SkiplistNode*)fpadelete_min_write_back_mem.key;
-                fpahelp_info.put_buffer.size = response * SKIPLIST_MAX_VALUSES_IN_NODE;
                 remove_min_from_smallest_buffer(key_write_back, &val);
             }
             atomic_store_explicit(&fpadelete_min_write_back_mem.response, -1, memory_order_relaxed);
@@ -975,7 +973,6 @@ unsigned long fpaslqdcatree_remove_min_param(FPACATreeSet * set,
     }else{
         // node response
         fpahelp_info.del_min_buffer = (SkiplistNode*)fpadelete_min_write_back_mem.key;
-        fpahelp_info.put_buffer.size = set->relaxation * SKIPLIST_MAX_VALUSES_IN_NODE;
         remove_min_from_smallest_buffer(key_write_back, &val);
     }
     atomic_store_explicit(&fpadelete_min_write_back_mem.response, -1, memory_order_relaxed);
