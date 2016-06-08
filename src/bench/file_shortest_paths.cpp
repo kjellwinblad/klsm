@@ -52,6 +52,8 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_KLSM16     "klsm16"
 #define PQ_KLSM128    "klsm128"
 #define PQ_KLSM256    "klsm256"
+#define PQ_KLSM512   "klsm512"
+#define PQ_KLSM1024   "klsm1024"
 #define PQ_KLSM2048   "klsm2048"
 #define PQ_KLSM4096   "klsm4096"
 #define PQ_KLSM8192   "klsm8192"
@@ -532,6 +534,12 @@ main(int argc,
          ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM256) {
          kpq::k_lsm<size_t, size_t, 256> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_KLSM512) {
+         kpq::k_lsm<size_t, size_t, 512> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_KLSM1024) {
+         kpq::k_lsm<size_t, size_t, 1024> pq;
          ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM2048) {
          kpq::k_lsm<size_t, size_t, 2048> pq;
