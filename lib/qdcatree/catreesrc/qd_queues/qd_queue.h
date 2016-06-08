@@ -12,6 +12,22 @@
 
 /* Queue Delegation Queue */
 
+
+#define ATOMIC_FETCH_ADD(value_ptr, to_add) atomic_fetch_add(value_ptr, to_add)
+
+
+/* static inline unsigned long my_fetch_and_add(volatile atomic_ulong* value_ptr, unsigned long to_add){ */
+/*     unsigned long expected = atomic_load_explicit(value_ptr, memory_order_acquire); */
+/*     while(!atomic_compare_exchange_strong( value_ptr, */
+/*                                            &expected, expected + to_add )){ */
+/*         thread_yield(); */
+/*     } */
+/*     return expected + to_add; */
+/* } */
+/* #define ATOMIC_FETCH_ADD(value_ptr, to_add) my_fetch_and_add(value_ptr, to_add) */
+
+#define ATOMIC_FETCH_ADD(value_ptr, to_add) atomic_fetch_add(value_ptr, to_add)
+
 #ifndef QD_QUEUE_BUFFER_SIZE
 #define QD_QUEUE_BUFFER_SIZE 8192
 //4096
@@ -65,7 +81,7 @@ static inline void * qdq_enqueue_get_buffer(QDQueue* q,
     }
     unsigned int storeSize = sizeof(QDRequestRequestId) + messageSize;
     unsigned int pad = QDQ_CALCULATE_PAD(storeSize);
-    unsigned long bufferOffset = atomic_fetch_add(&q->counter.value,
+    unsigned long bufferOffset = ATOMIC_FETCH_ADD(&q->counter.value,
                                                   storeSize + pad);
     unsigned int writeToOffset = (bufferOffset + storeSize);
     unsigned int nextReqOffset = writeToOffset + pad;
@@ -104,7 +120,7 @@ static inline bool qdq_enqueue(QDQueue* q,
     char * messageBuffer = (char *) messageAddress;
     unsigned int storeSize = sizeof(QDRequestRequestId) + messageSize;
     unsigned int pad = QDQ_CALCULATE_PAD(storeSize);
-    unsigned long bufferOffset = atomic_fetch_add(&q->counter.value,
+    unsigned long bufferOffset = ATOMIC_FETCH_ADD(&q->counter.value,
                                                   storeSize + pad);
     unsigned int writeToOffset = (bufferOffset + storeSize);
     unsigned int nextReqOffset = writeToOffset + pad;
