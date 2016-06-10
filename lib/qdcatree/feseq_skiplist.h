@@ -29,6 +29,7 @@ typedef struct key_value_item {
 typedef struct skiplist_node {
     //contains information about if it is a boarder point
     unsigned char info;
+    bool sorted;
     unsigned char num_of_levels;
     unsigned char first_key_value_pos;
     unsigned long max_key;

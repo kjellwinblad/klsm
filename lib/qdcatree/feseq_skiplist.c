@@ -45,6 +45,27 @@ struct find_result {
  * ==================
  */
 
+// From https://rosettacode.org/wiki/Sorting_algorithms/Insertion_sort#C
+static inline void insertion_sort(KeyValueItem *a, unsigned int n) {
+    for(unsigned long i = 1; i < n; ++i) {
+        KeyValueItem tmp = a[i];
+        unsigned int j = i;
+        while(j > 0 && tmp.key < a[j - 1].key) {
+            a[j] = a[j - 1];
+            --j;
+        }
+        a[j] = tmp;
+    }
+}
+
+static inline void sort_node(SkiplistNode * node) {
+    if(! node->sorted){
+        node->sorted = true;
+        insertion_sort(&node->key_values[node->first_key_value_pos],
+                       SKIPLIST_MAX_VALUSES_IN_NODE - node->first_key_value_pos);
+    }
+}
+
 static inline 
 SkiplistNode* create_skiplist_node(int num_of_levels){
     SkiplistNode* skiplist = 
@@ -52,6 +73,7 @@ SkiplistNode* create_skiplist_node(int num_of_levels){
                                        sizeof(SkiplistNode*) * (num_of_levels) +
                                        sizeof(unsigned long) * (SKIPLIST_MAX_VALUSES_IN_NODE*2));
     skiplist->info = SKIPLIST_NORMAL_NODE;
+    skiplist->sorted = false;
     skiplist->num_of_levels = num_of_levels;
     skiplist->first_key_value_pos = SKIPLIST_MAX_VALUSES_IN_NODE;
     skiplist->key_values = (KeyValueItem *)&skiplist->lower_lists[num_of_levels];
@@ -321,6 +343,7 @@ unsigned long skiplist_remove_min(Skiplist * skiplist, unsigned long * key_write
         *key_write_back = -1;
         return 0;
     } else {
+        sort_node(firstCandidate);
         *key_write_back = firstCandidate->key_values[firstCandidate->first_key_value_pos].key;
         unsigned long value = firstCandidate->key_values[firstCandidate->first_key_value_pos].value;
         firstCandidate->first_key_value_pos++;
@@ -385,6 +408,27 @@ void skiplist_insert_into_non_full_node(SkiplistNode * node, unsigned long key, 
         node->max_key = key;
     }
 }
+
+static inline
+void skiplist_insert_into_non_full_node_no_sort(SkiplistNode * node,
+                                                unsigned long key,
+                                                unsigned long value){
+    /* skiplist_insert_into_non_full_node(node, */
+    /*                                    key, */
+    /*                                    value); */
+    if(node->sorted){
+        node->sorted = false;
+    }
+    unsigned int current_pos = node->first_key_value_pos -1;
+    node->first_key_value_pos = current_pos;
+    if(node->first_key_value_pos == (SKIPLIST_MAX_VALUSES_IN_NODE-1) || key > node->max_key){
+        node->max_key = key;
+    }
+    node->key_values[current_pos].key = key;
+    node->key_values[current_pos].value = value;
+
+}
+
 
 static inline SkiplistNode* insert_new_node(SkiplistNode * head_node,
                                             struct find_result neigbours){
@@ -461,10 +505,11 @@ void skiplist_put(Skiplist * skiplist, unsigned long key, unsigned long value){
     if(first_node->info == SKIPLIST_RIGHT_BORDER_NODE &&
        before_node->info != SKIPLIST_LEFT_BORDER_NODE &&
        before_node->first_key_value_pos != 0){
-        skiplist_insert_into_non_full_node(before_node, key, value);
+        skiplist_insert_into_non_full_node_no_sort(before_node, key, value);
     }else if (first_node->info == SKIPLIST_RIGHT_BORDER_NODE &&
               before_node->info != SKIPLIST_LEFT_BORDER_NODE){
         /*Need to split the node before*/
+        sort_node(before_node);
         SkiplistNode* new_skiplist_node = insert_new_node(head_node, neigbours);
         move_items_from_full(before_node, new_skiplist_node, SKIPLIST_MAX_VALUSES_IN_NODE);
         unsigned long new_key = new_skiplist_node->key_values[SKIPLIST_MAX_VALUSES_IN_NODE-1].key;
@@ -477,13 +522,14 @@ void skiplist_put(Skiplist * skiplist, unsigned long key, unsigned long value){
     }else if(first_node->info == SKIPLIST_NORMAL_NODE &&
        first_node->max_key >= key &&
        (first_node->first_key_value_pos != 0)){
-        skiplist_insert_into_non_full_node(first_node, key, value);
+        skiplist_insert_into_non_full_node_no_sort(first_node, key, value);
     } else if(first_node->info == SKIPLIST_RIGHT_BORDER_NODE){
         /* No node, insert first */
         SkiplistNode* new_skiplist_node = insert_new_node(head_node, neigbours);
-        skiplist_insert_into_non_full_node(new_skiplist_node, key, value);
+        skiplist_insert_into_non_full_node_no_sort(new_skiplist_node, key, value);
     }else{
         /* We need to split */
+        sort_node(first_node);
         SkiplistNode* new_skiplist_node = insert_new_node(head_node, neigbours);
         do_split(new_skiplist_node, first_node, key, value);
     }
@@ -531,6 +577,7 @@ unsigned long skiplist_split(Skiplist * skiplist,
     }
     /* Make sure that the split is non-empty */
     SkiplistNode * first_node = head_node->lower_lists[head_node->num_of_levels -1];
+    sort_node(first_node);
     if(first_node->key_values[first_node->first_key_value_pos].key == split_key){
         do{
             split_node = split_node->lower_lists[split_node->num_of_levels -1];
@@ -558,6 +605,7 @@ unsigned long skiplist_split(Skiplist * skiplist,
     struct find_result split_info = find_neigbours(&skiplist->head_node, split_key);
 
     SkiplistNode * first_node_in_right = split_info.neigbours_after[SKIPLIST_NUM_OF_LEVELS -1];
+    sort_node(first_node_in_right);
     if(first_node_in_right->key_values[first_node_in_right->first_key_value_pos].key != split_key){
         /* The first key is not the splt_key, we need to split it */
         for(unsigned char split_node_pos = first_node_in_right->first_key_value_pos+1;
