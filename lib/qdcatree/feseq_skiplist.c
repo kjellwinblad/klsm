@@ -58,11 +58,38 @@ static inline void insertion_sort(KeyValueItem *a, unsigned int n) {
     }
 }
 
+// From http://rosettacode.org/wiki/Sorting_algorithms/Quicksort#C
+static inline
+void quick_sort (KeyValueItem  *a, int n) {
+    int i, j;
+    KeyValueItem  t;
+    unsigned long p;
+    if (n < 5){
+        insertion_sort(a, n);
+        return;
+    }
+    p = a[n / 2].key;
+    for (i = 0, j = n - 1;; i++, j--) {
+        while (a[i].key < p)
+            i++;
+        while (p < a[j].key)
+            j--;
+        if (i >= j)
+            break;
+        t = a[i];
+        a[i] = a[j];
+        a[j] = t;
+    }
+    quick_sort(a, i);
+    quick_sort(a + i, n - i);
+}
+
+
 static inline void sort_node(SkiplistNode * node) {
     if(! node->sorted){
         node->sorted = true;
-        insertion_sort(&node->key_values[node->first_key_value_pos],
-                       SKIPLIST_MAX_VALUSES_IN_NODE - node->first_key_value_pos);
+        quick_sort(&node->key_values[node->first_key_value_pos],
+                   SKIPLIST_MAX_VALUSES_IN_NODE - node->first_key_value_pos);
     }
 }
 
