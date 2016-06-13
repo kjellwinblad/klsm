@@ -81,6 +81,17 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
 /* hwloc does not work on all platforms */
 #define MANUAL_PINNING 1
+#define PAPI 1
+
+#ifdef PAPI
+extern "C" {
+#include <papi.h>
+}
+#define G_EVENT_COUNT 2
+#define MAX_THREADS 80
+int g_events[] = { PAPI_L1_DCM, PAPI_L2_DCM };
+long long g_values[MAX_THREADS][G_EVENT_COUNT] = {0,};
+#endif
 
 int number_of_threads;
 
@@ -285,6 +296,13 @@ bench_thread(T *pq,
 #else
     hwloc.pin_to_core(thread_id);
 #endif
+
+#ifdef PAPI
+    if (PAPI_OK != PAPI_start_counters(g_events, G_EVENT_COUNT)){
+            std::cout << ("Problem starting counters 1.\n");
+    }
+#endif
+    
     pq->init_thread(number_of_threads);
     while (!start_barrier.load(std::memory_order_relaxed)) {
         /* Wait. */
@@ -377,6 +395,11 @@ bench_thread(T *pq,
         }
     }
     *nodes_processed_writeback = nodes_processed;
+#ifdef PAPI
+    if (PAPI_OK != PAPI_read_counters(g_values[thread_id], G_EVENT_COUNT)){
+        std::cout << ("Problem reading counters 2.\n");
+    }
+#endif
 }
 
 template <class T>
@@ -447,7 +470,7 @@ bench(T *pq,
                 settings.output_file);
     
     const double elapsed = timediff_in_s(start, end);
-    fprintf(stdout, "%f %lu\n", elapsed, total_number_of_nodes_processed);
+    fprintf(stdout, "%f %lu", elapsed, total_number_of_nodes_processed);
 
     delete_graph(graph, number_of_nodes);
     return ret;
@@ -519,6 +542,21 @@ main(int argc,
     s.type = argv[optind];
 
     number_of_threads =  s.num_threads;
+
+#ifdef PAPI
+  if (PAPI_VER_CURRENT != PAPI_library_init(PAPI_VER_CURRENT)){
+    std::cout << ("PAPI_library_init error.\n");
+    return 0; 
+  }
+
+  if (PAPI_OK != PAPI_query_event(PAPI_L1_DCM)){
+    std::cout << ("Cannot count PAPI_L1_DCM.\n");
+  }
+  if (PAPI_OK != PAPI_query_event(PAPI_L2_DCM)){
+    std::cout << ("Cannot count PAPI_L2_DCM.");
+  }
+#endif
+
     
     if (s.type == PQ_DLSM) {
         kpq::dist_lsm<size_t, size_t, DEFAULT_RELAXATION> pq;
@@ -622,7 +660,20 @@ main(int argc,
     }
     else {
         usage();
+        return ret;
     }
-
-    return ret;
+#ifdef PAPI
+  long total_L1_miss = 0;
+  long total_L2_miss = 0;
+  int k = 0;
+  for (k = 0; k <  s.num_threads; k++) {
+    total_L1_miss += g_values[k][0];
+    total_L2_miss += g_values[k][1];
+    //printf("[Thread %d] L1_DCM: %lld\n", i, g_values[i][0]);
+    //printf("[Thread %d] L2_DCM: %lld\n", i, g_values[i][1]);
+  }
+  printf(" %ld %ld", total_L1_miss, total_L2_miss);
+#endif
+  printf("\n");
+  return ret;
 }

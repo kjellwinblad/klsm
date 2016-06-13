@@ -52,4 +52,5 @@ target_link_libraries(file_shortest_paths
     thread_local_ptr
     spraylist
     qdcatree
+    /usr/local/lib/libpapi.a
 )

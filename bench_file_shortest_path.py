@@ -1,8 +1,8 @@
 import sys
 import subprocess
-THREAD_COUNTS=[1,2,4,8,16,32,64]
-EDGE_WEIGHT_RANGES=[0,100,10000,1000000]
-GRAPH_FILES=[("roadNet-CA.txt", "roadnet"),("soc-LiveJournal1.txt","live"), ("com-orkut.ungraph.txt", "orkut"), ("grid1000_undir.txt", "undirgrid")]
+THREAD_COUNTS=[1,2,4,8,16,24,32,48,64]
+EDGE_WEIGHT_RANGES=[0,1000,1000000]
+GRAPH_FILES=[("roadNet-CA.txt", "roadnet"),("soc-LiveJournal1.txt","live")]#, ("com-orkut.ungraph.txt", "orkut"), ("grid1000_undir.txt", "undirgrid")
 post_fix = sys.argv[1]
 data_structure = sys.argv[2]
 
