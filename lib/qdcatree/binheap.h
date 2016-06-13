@@ -35,7 +35,6 @@ bool peek (heap_t *h, unsigned long *key) {
     if (h->len == 0) {
         return false;
     }
-    assert(false);
     *key = h->nodes[1].key;
     return true;
 }
