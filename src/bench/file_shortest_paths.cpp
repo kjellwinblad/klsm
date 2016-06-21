@@ -60,6 +60,7 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_KLSM16384  "klsm16384"
 #define PQ_KLSM32768  "klsm32768"
 #define PQ_KLSM65536  "klsm65536"
+#define PQ_KLSM131072  "klsm131072"
 #define PQ_MULTIQC2     "multiqC2"
 #define PQ_MULTIQC4     "multiqC4"
 #define PQ_MULTIQC8     "multiqC8"
@@ -81,7 +82,7 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
 /* hwloc does not work on all platforms */
 #define MANUAL_PINNING 1
-#define PAPI 1
+//#define PAPI 1
 
 #ifdef PAPI
 extern "C" {
@@ -596,6 +597,9 @@ main(int argc,
          ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM65536) {
          kpq::k_lsm<size_t, size_t, 65536> pq;
+         ret = bench(&pq, s);
+    } else if (s.type == PQ_KLSM131072) {
+         kpq::k_lsm<size_t, size_t, 131072> pq;
          ret = bench(&pq, s);
     } else if (s.type == PQ_GLOBALLOCK) {
          kpqbench::GlobalLock<size_t, size_t> pq;
