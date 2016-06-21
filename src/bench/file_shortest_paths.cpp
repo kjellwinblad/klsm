@@ -90,7 +90,7 @@ extern "C" {
 }
 #define G_EVENT_COUNT 2
 #define MAX_THREADS 80
-int g_events[] = { PAPI_L1_DCM, PAPI_L2_DCM };
+int g_events[] = { PAPI_L2_DCA, PAPI_L2_DCM  };
 long long g_values[MAX_THREADS][G_EVENT_COUNT] = {0,};
 #endif
 
@@ -299,8 +299,9 @@ bench_thread(T *pq,
 #endif
 
 #ifdef PAPI
-    if (PAPI_OK != PAPI_start_counters(g_events, G_EVENT_COUNT)){
-            std::cout << ("Problem starting counters 1.\n");
+    int papi = PAPI_start_counters(g_events, G_EVENT_COUNT);
+    if (PAPI_OK != papi){
+      std::cout << "Problem starting counters " << papi << ".\n";
     }
 #endif
     
@@ -397,8 +398,9 @@ bench_thread(T *pq,
     }
     *nodes_processed_writeback = nodes_processed;
 #ifdef PAPI
-    if (PAPI_OK != PAPI_read_counters(g_values[thread_id], G_EVENT_COUNT)){
-        std::cout << ("Problem reading counters 2.\n");
+    int papi2 = PAPI_read_counters(g_values[thread_id], G_EVENT_COUNT);
+    if (PAPI_OK != papi2){
+      std::cout << "Problem reading counters " << papi2 << ".\n";
     }
 #endif
 }
@@ -550,8 +552,8 @@ main(int argc,
     return 0; 
   }
 
-  if (PAPI_OK != PAPI_query_event(PAPI_L1_DCM)){
-    std::cout << ("Cannot count PAPI_L1_DCM.\n");
+  if (PAPI_OK != PAPI_query_event(PAPI_L2_DCA)){
+    std::cout << ("Cannot count PAPI_L2_DCA.\n");
   }
   if (PAPI_OK != PAPI_query_event(PAPI_L2_DCM)){
     std::cout << ("Cannot count PAPI_L2_DCM.");
