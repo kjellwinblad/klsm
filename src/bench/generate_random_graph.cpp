@@ -97,8 +97,6 @@ main(int argc,
         switch (opt) {
         case 'n':
             errno = 0;
-            cout << "before1" << std::endl;
-            cout <<optarg << std::endl;
             number_of_nodes = strtoul(optarg, NULL, 0);
             if (errno != 0) {
                 //usage();
@@ -106,8 +104,6 @@ main(int argc,
             break;
         case 'p':
             errno = 0;
-            cout << "before" << std::endl;
-            cout <<optarg << std::endl;
             edge_probability = strtod(optarg, NULL);
             if (errno != 0) {
                 //usage();
