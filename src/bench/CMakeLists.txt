@@ -65,3 +65,7 @@ target_link_libraries(file_shortest_paths_seq_no_lazy_relax
 target_include_directories(file_shortest_paths_seq_no_lazy_relax PUBLIC
     ${CMAKE_SOURCE_DIR}/lib/fibheap
 )
+
+
+
+add_executable(generate_random_graph generate_random_graph.cpp)
