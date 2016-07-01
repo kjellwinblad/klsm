@@ -221,26 +221,6 @@ read_graph(std::string file_path,
 }
 
 static void
-verify_graph(const vertex_t *graph,
-             const size_t n)
-{
-    for (size_t i = 0; i < n; i++) {
-        const vertex_t *v = &graph[i];
-        const size_t v_dist = v->distance.load(std::memory_order_relaxed);
-
-        for (size_t j = 0; j < v->num_edges; j++) {
-            const edge_t *e = &v->edges[j];
-            const size_t new_dist = v_dist + e->weight;
-
-            const vertex_t *w = &graph[e->target];
-            const size_t w_dist = w->distance.load(std::memory_order_relaxed);
-
-            assert(new_dist >= w_dist), (void)new_dist, (void)w_dist;
-        }
-    }
-}
-
-static void
 print_graph(const vertex_t *graph,
             const size_t n,
             std::string out_file)
@@ -309,18 +289,7 @@ bench_thread(T *pq,
     while (!start_barrier.load(std::memory_order_relaxed)) {
         /* Wait. */
     }
-    //bool last_success = true;
-    //int threads_waiting;
-    //(threads_waiting = wt.threads_waiting_to_succeed.load(std::memory_order_relaxed)) < number_of_threads
-    //std::cerr << "Start\n";
-    //size_t max_dist = 0;
     while (true) {
-        // if(!last_success && threads_waiting == 0){
-        //     last_success = true;
-        // }else if(!last_success){
-        //     std::this_thread::yield();
-        //     continue;
-        // }
         size_t distance;
         size_t node;
         if (!pq->delete_min(distance, node)) {
@@ -333,40 +302,17 @@ bench_thread(T *pq,
                 std::this_thread::yield();
             }
             if(!success){
-                //std::cerr << "exit\n";
                 //We give up... No work for us
                 break;
-            }
-            //last_success = false;
-            //wt.threads_waiting_to_succeed.fetch_add(1);
-            
+            }           
         }
-        // if(distance > max_dist){
-        //     max_dist = distance;
-        //     std::cout << "NODE DELTED: " << node << " DISTANCE " << distance << std::endl << std::flush    ;
-        // }
-        // if(threads_waiting > 0){
-        //     wt.threads_waiting_to_succeed = 0;
-        // }
         vertex_t *v = &graph[node];
         const size_t v_dist = v->distance.load(std::memory_order_relaxed);
-        //std::cout << "removed key " << distance << "node" << node << "t"<< thread_id<< std::flush<< std::endl;
         if (distance > v_dist) {
             /*Dead node... ignore*/
             continue;
         }
         nodes_processed++;
-        // if(record_processed){
-        //     if(v->processed){
-        //         std::cerr << "SHOULD NOT HAPPEN!!! " // << w_dist << " " << new_dist <<" "<<e->weight 
-        //                   << std::endl;
-        //         pq->signal_waste();
-        //     }else{
-        //         v->processed = true;
-        //         pq->signal_no_waste();
-        //     }
-        // }
-        //std::cout << "process " << node << "\n";
         for (size_t i = 0; i < v->num_edges; i++) {
             const edge_t *e = &v->edges[i];
             const size_t new_dist = v_dist + e->weight;
@@ -376,13 +322,7 @@ bench_thread(T *pq,
 
             if (new_dist >= w_dist) {
                 continue;
-            }// else if(w_dist < std::numeric_limits<size_t>::max()){
-            //     /* Last processing of the node was wasted work */
-
-            //     pq->signal_waste();
-            // }else{
-            //     pq->signal_no_waste();
-            // }
+            }
 
             bool dist_updated;
             do {
@@ -391,7 +331,6 @@ bench_thread(T *pq,
             } while (!dist_updated && w_dist > new_dist);
 
             if (dist_updated) {
-                //std::cout << "insert" << new_dist << std::endl;
                 pq->insert(new_dist, e->target);
             }
         }
@@ -467,7 +406,6 @@ bench(T *pq,
     clock_gettime(CLOCK_MONOTONIC, &end);
     /* End benchmark. */
 
-    //verify_graph(graph, number_of_nodes);
     print_graph(graph,
                 number_of_nodes,
                 settings.output_file);
@@ -669,16 +607,14 @@ main(int argc,
         return ret;
     }
 #ifdef PAPI
-  long total_L1_miss = 0;
-  long total_L2_miss = 0;
+  long total_L2_cache_accesses = 0;
+  long total_L2_cache_misses = 0;
   int k = 0;
   for (k = 0; k <  s.num_threads; k++) {
-    total_L1_miss += g_values[k][0];
-    total_L2_miss += g_values[k][1];
-    //printf("[Thread %d] L1_DCM: %lld\n", i, g_values[i][0]);
-    //printf("[Thread %d] L2_DCM: %lld\n", i, g_values[i][1]);
+    total_L2_cache_accesses += g_values[k][0];
+    total_L2_cache_misses += g_values[k][1];
   }
-  printf(" %ld %ld", total_L1_miss, total_L2_miss);
+  printf(" %ld %ld", total_L2_cache_accesses, total_L2_cache_misses);
 #endif
   printf("\n");
   return ret;

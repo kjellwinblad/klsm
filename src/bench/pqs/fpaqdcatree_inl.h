@@ -43,6 +43,7 @@ template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
 FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::init_thread(const size_t nthreads)
 {
+    (void)nthreads;
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>

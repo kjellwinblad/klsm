@@ -176,26 +176,6 @@ read_graph(std::string file_path,
 }
 
 static void
-verify_graph(const vertex_t *graph,
-             const size_t n)
-{
-    for (size_t i = 0; i < n; i++) {
-        const vertex_t *v = &graph[i];
-        const size_t v_dist = v->distance;
-
-        for (size_t j = 0; j < v->num_edges; j++) {
-            const edge_t *e = &v->edges[j];
-            const size_t new_dist = v_dist + e->weight;
-
-            const vertex_t *w = &graph[e->target];
-            const size_t w_dist = w->distance;
-
-            assert(new_dist >= w_dist), (void)new_dist, (void)w_dist;
-        }
-    }
-}
-
-static void
 print_graph(const vertex_t *graph,
             const size_t n,
             std::string out_file)

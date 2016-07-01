@@ -20,7 +20,6 @@ add_executable(random random.cpp itree.cpp util.cpp)
 target_link_libraries(random
     ${CMAKE_THREAD_LIBS_INIT}
     ${HWLOC_LIBRARIES}
-    aec_queue
     linden
     qdcatree
     sequence_heap
