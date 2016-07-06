@@ -81,7 +81,7 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 /* Hack to support graphs that are badly formatted */
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
 /* hwloc does not work on all platforms */
-#define MANUAL_PINNING 1
+//#define MANUAL_PINNING 1
 //#define PAPI 1
 
 #ifdef PAPI
@@ -140,12 +140,11 @@ usage()
             "       -w: Generate random weights between 0 and end_of_range\n"
             "       -s: The random number generator seed (default = %d)\n"
             "       -o: Output file name (default = %s)\n"
-            "       pq: The data structure to use as the backing priority queue\n"
-            "           (one of '%s', %s', '%s', '%s')\n",
+            "       pq: The data structure to use as the backing priority queue (see source file)\n"
+            "\n",
             DEFAULT_NTHREADS,
             DEFAULT_SEED,
-            DEFAULT_OUTPUT_FILE.c_str(),
-            PQ_DLSM, PQ_GLOBALLOCK, PQ_KLSM, PQ_MULTIQC2);
+            DEFAULT_OUTPUT_FILE.c_str());
     exit(EXIT_FAILURE);
 }
 
@@ -173,7 +172,6 @@ read_graph(std::string file_path,
     for(size_t i = 0; i < n; i++){
         data[i].num_edges = 0;
         data[i].distance.store(std::numeric_limits<size_t>::max(), std::memory_order_relaxed );
-        //data[i].processed = false;
         data[i].edges = NULL;
     }
     for(size_t i = 0; i < n; i++){
@@ -316,7 +314,6 @@ bench_thread(T *pq,
         for (size_t i = 0; i < v->num_edges; i++) {
             const edge_t *e = &v->edges[i];
             const size_t new_dist = v_dist + e->weight;
-            //  std::cout << "traverse to " << e->target << " using weight " <<  e->weight << "\n";
             vertex_t *w = &graph[e->target];
             size_t w_dist = w->distance.load(std::memory_order_relaxed);
 

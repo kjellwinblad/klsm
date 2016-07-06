@@ -39,8 +39,7 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 
 /* Hack to support graphs that are badly formatted */
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
-/* hwloc does not work on all platforms */
-#define MANUAL_PINNING 1
+
 //#define PAPI 1
 
 #ifdef PAPI
@@ -379,16 +378,14 @@ main(int argc,
         return ret;
     }
 #ifdef PAPI
-  long total_L1_miss = 0;
-  long total_L2_miss = 0;
+  long total_L2_cache_accesses = 0;
+  long total_L2_cache_misses = 0;
   int k = 0;
   for (k = 0; k <  s.num_threads; k++) {
-    total_L1_miss += g_values[k][0];
-    total_L2_miss += g_values[k][1];
-    //printf("[Thread %d] L1_DCM: %lld\n", i, g_values[i][0]);
-    //printf("[Thread %d] L2_DCM: %lld\n", i, g_values[i][1]);
+    total_L2_cache_accesses += g_values[k][0];
+    total_L2_cache_misses += g_values[k][1];
   }
-  printf(" %ld %ld", total_L1_miss, total_L2_miss);
+  printf(" %ld %ld", total_L2_cache_accesses, total_L2_cache_misses);
 #endif
   printf("\n");
   return ret;

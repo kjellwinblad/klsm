@@ -107,28 +107,6 @@ SkiplistNode* create_skiplist_node(int num_of_levels){
     return skiplist;
 }
 
-/* static inline  */
-/* SkiplistNode* relevel_skiplist_node(int num_of_levels,  */
-/*                                     unsigned long key, */
-/*                                     int number_of_values, */
-/*                                     unsigned long * values){ */
-/*     SkiplistNode* skiplist =  */
-/*         (SkiplistNode*)SKIPLIST_MALLOC(sizeof(SkiplistNode) +  */
-/*                                        sizeof(SkiplistNode*) * (num_of_levels) + */
-/*                                        sizeof(unsigned long) * SKIPLIST_MAX_VALUSES_IN_NODE); */
-/*     skiplist->info = SKIPLIST_NORMAL_NODE; */
-/*     skiplist->key = key; */
-/*     skiplist->num_of_levels = num_of_levels; */
-/*     skiplist->index_left = 0; */
-/*     skiplist->index_right = number_of_values; */
-/*     skiplist->values = &skiplist->lower_lists[num_of_levels]; */
-/*     for(int i = 0; i < number_of_values; i++){ */
-/*         skiplist->values[i] = values[i]; */
-/*     } */
-/*     return skiplist; */
-/* } */
-
-
 struct thread_local_rand_state
 {
     char pad1[56];

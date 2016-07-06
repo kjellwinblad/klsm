@@ -224,7 +224,6 @@ CATreeBaseOrRouteNode * allocate_route_node(unsigned long key,
                                             CATreeBaseOrRouteNode * newBaseLeft,
                                             CATreeBaseOrRouteNode * newBaseRight){
     CATreeBaseOrRouteNode * newRoute = gc_alloc(ptst, gc_id); 
-    //SLCATREE_MALLOC(sizeof(CATreeBaseOrRouteNode));
     newRoute->isBaseNode = false;
     LL_initialize(&newRoute->baseOrRoute.route.lock);
     newRoute->baseOrRoute.route.valid = true;
@@ -237,8 +236,6 @@ CATreeBaseOrRouteNode * allocate_route_node(unsigned long key,
 
 static inline
 void plain_slcatree_set_init(FPACATreeSet * set){
-    //    drmcs_initialize(&set->globalLock);
-    //LL_initialize(&set->delete_min_lock);
     gc_id = gc_add_allocator(sizeof(CATreeBaseOrRouteNode));
     critical_enter();
     set->root = allocate_base_node(new_skiplist());
@@ -323,18 +320,6 @@ void slcatree_set_free_helper(CATreeBaseOrRouteNode * root){
 static inline
 void slcatree_set_destroy(void * setParam){
     FPACATreeSet * set = (FPACATreeSet *)setParam;
-    /* for(int i = 0; i < SLCATREE_FREE_LIST_SIZE; i++){ */
-    /*     CATreeBaseOrRouteNode * elementToFree = (CATreeBaseOrRouteNode *)atomic_load(&set->freeList[i]); */
-    /*     if(elementToFree != NULL){ */
-    /*         if(elementToFree->isBaseNode){ */
-    /*             LL_destroy(&elementToFree->baseOrRoute.base.lock.lock); //Free deleted base */
-    /*             SLCATREE_FREE(elementToFree); */
-    /*         }else{ */
-    /*             LL_destroy(&elementToFree->baseOrRoute.route.lock); //Free deleted route */
-    /*             SLCATREE_FREE(elementToFree);    */
-    /*         } */
-    /*     } */
-    /* } */
     slcatree_set_free_helper(set->root);
 }
 
@@ -587,26 +572,15 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
     catree_lock(&newNeighbourBaseContainer->baseOrRoute.base.lock);
     CATreeBaseNode * newNeighbourBase = &newNeighbourBaseContainer->baseOrRoute.base;
     if(SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE > fpahelp_info.flush_stack_pos){
-      //printf("L STACK POS %d\n", fpahelp_info.flush_stack_pos);
       LL_open_delegation_queue(&newNeighbourBase->lock.lock);
       fpahelp_info.flush_stack[fpahelp_info.flush_stack_pos] = newNeighbourBaseContainer;
     }
     fpahelp_info.flush_stack_pos++;
-    /* if(neighbourBase->root == NULL){ */
-    /*     newNeighbourBase->root = node->root; */
-    /* }else if(node->root != NULL){ */
-        CATreeBaseNode * leftBase;
-        CATreeBaseNode * rightBase;
-        /* if(neighbourLeft){ */
-        /*     leftBase = neighbourBase; */
-        /*     rightBase = node; */
-        /* }else{ */
-            leftBase = node;
-            rightBase = neighbourBase;
-        /* } */
-        newNeighbourBase->root = skiplist_join(leftBase->root,
-                                               rightBase->root);
-    /* } */
+    CATreeBaseNode * leftBase;
+    CATreeBaseNode * rightBase;
+    leftBase = node;
+    rightBase = neighbourBase;
+    newNeighbourBase->root = skiplist_join(leftBase->root,rightBase->root);
     //Take out the node
     //Lock parent
     LL_lock(&parent->lock);
@@ -636,12 +610,7 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
     }else{
         parentInLinkPtrPtr = (CATreeBaseOrRouteNode **)&parentOfParentRoute->baseOrRoute.route.right;
     }
-    /* if(neighbourLeft){ */
-    /*     *parentInLinkPtrPtr = parent->left; */
-    /* }else{ */
-        *parentInLinkPtrPtr = parent->right;
-    /* } */
-    //Unlink should have happened YEY
+    *parentInLinkPtrPtr = parent->right;
     //Unlock the locks
     parent->valid = false;
     LL_unlock(&parent->lock);
@@ -649,7 +618,7 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
         LL_unlock(&parentOfParentRoute->baseOrRoute.route.lock);
     }
     //Link in new neighbour base which should be locked first:
-                DEBUG_PRINT(("FORCE LOCK NEW NE base %p\n", newNeighbourBaseContainer));
+    DEBUG_PRINT(("FORCE LOCK NEW NE base %p\n", newNeighbourBaseContainer));
     if(*parentInLinkPtrPtr == neighbourBaseContainer){
         *parentInLinkPtrPtr = newNeighbourBaseContainer;
     }else if(neighbourBaseParentRoute->baseOrRoute.route.left == neighbourBaseContainer){
@@ -664,13 +633,9 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
         DEBUG_PRINT(("force unlock node %p\n", baseNodeContainer));
         catree_unlock(&node->lock);
     }
-    //TODO SKIP FREEING!
     gc_free(ptst, baseNodeContainer, gc_id);
     gc_free(ptst, neighbourBaseContainer, gc_id);
     gc_free(ptst, parentRoute, gc_id);
-    //enqueue_in_free_list(set, baseNodeContainer);
-    //enqueue_in_free_list(set, neighbourBaseContainer);
-    //enqueue_in_free_list(set, parentRoute);
 #ifdef SLCATREE_COUNT_ROUTE_NODES
     int count = atomic_fetch_sub(&set->nrOfRouteNodes, 1);
     printf("%d\n", count);
@@ -825,14 +790,11 @@ static inline void adjust_remove_min_relaxation(){
         fpahelp_info.remove_min_contention = 0;
         if(fpahelp_info.set->relaxation < MAX_REMOVE_MIN_RELAXATION_SIZE){
 	  fpahelp_info.set->relaxation += REMOVE_MIN_INCREASE_VALUE;
-	  //fpahelp_info.max_buffered_puts +
-	  //printf("%d ", fpahelp_info.set->relaxation);
 	}
     }else if (fpahelp_info.remove_min_contention < REMOVE_MIN_LOW_CONTENTION_ADATION_LIMIT){
         fpahelp_info.remove_min_contention =0;
         if(fpahelp_info.set->relaxation > 0){
             fpahelp_info.set->relaxation = fpahelp_info.set->relaxation-REMOVE_MIN_DECREASE_VALUE;
-	    //printf("%d ", fpahelp_info.set->relaxation);
         }
     }
 }
@@ -841,16 +803,11 @@ static inline void adjust_put_buffer(){
     //Both buffers are empty reset put buffer and check if tresholds for put buffer limits are reached
     if(fpahelp_info.put_contention > PUT_BUFF_HIGH_CONTENTION_ADATION_LIMIT){
         fpahelp_info.put_contention = 0;
-        //if(fpahelp_info.max_buffered_puts < (MAX_PUT_BUFFER_SIZE-PUT_BUFF_INCREASE_VALUE)){
 	fpahelp_info.max_buffered_puts = PUT_BUFF_INCREASE_VALUE;
-	//fpahelp_info.max_buffered_puts +
-	//printf("%d ", fpahelp_info.max_buffered_puts);
-	    //}
     }else if (fpahelp_info.put_contention < PUT_BUFF_LOW_CONTENTION_ADATION_LIMIT){
         fpahelp_info.put_contention =0;
         if(fpahelp_info.max_buffered_puts > 0){
             fpahelp_info.max_buffered_puts = fpahelp_info.max_buffered_puts-PUT_BUFF_DECREASE_VALUE;
-            //printf("%d ", fpahelp_info.max_buffered_puts);
         }
     }
     fpahelp_info.put_buffer.size = fpahelp_info.max_buffered_puts;
@@ -930,12 +887,10 @@ unsigned long fpaslqdcatree_remove_min_param(FPACATreeSet * set,
         }
     } while(retry);
     if(contended){
-      //printf("R STACK POS %d\n", fpahelp_info.flush_stack_pos);
       LL_open_delegation_queue(&base_node->lock.lock);
       fpahelp_info.flush_stack[fpahelp_info.flush_stack_pos] = current_node;
       fpahelp_info.flush_stack_pos++;
     }else{
-      //printf("NOT CONT\n");
       fpahelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
     }
     fpahelp_info.set = set;
@@ -949,7 +904,6 @@ unsigned long fpaslqdcatree_remove_min_param(FPACATreeSet * set,
 	    current_stack_pos < fpahelp_info.flush_stack_pos){
 	CATreeBaseNode * n =&fpahelp_info.flush_stack[current_stack_pos]->baseOrRoute.base;
 	LL_flush_delegation_queue(&n->lock.lock);
-	//printf("FR STACK POS %d\n", current_stack_pos);
 	current_stack_pos++;
 	if(current_stack_pos<fpahelp_info.flush_stack_pos){
 	  DEBUG_PRINT(("not same as last node min unlock %p\n", current_node));
@@ -961,10 +915,6 @@ unsigned long fpaslqdcatree_remove_min_param(FPACATreeSet * set,
       fpahelp_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
       fpahelp_info.remove_min_contention-=REMOVE_MIN_LOW_CONTENTION_DECREASE;
     }
-      /* if(fpahelp_info.last_locked_node != fpahelp_info.current_help_node){ */
-      /*   DEBUG_PRINT(("not same as last node min unlock %p\n", current_node)); */
-      /*   LL_unlock(&base_node->lock.lock); */
-      /* } */
     fpahelp_info.flush_stack_pos = SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE + 1;
     perform_remove_min_with_lock(&fpadelete_min_write_back_mem);
     if(atomic_load_explicit(&fpadelete_min_write_back_mem.response, memory_order_relaxed) == 0){
@@ -1016,7 +966,6 @@ void fpaslqdcatree_put_param(FPACATreeSet * set,
                              unsigned long value,
                              bool catree_adapt){
     if(push(&fpahelp_info.put_buffer, key, value)){
-        //printf("%d ", fpahelp_info.max_buffered_puts);
         return;
     }
     critical_enter();
@@ -1043,7 +992,6 @@ void fpaslqdcatree_put_param(FPACATreeSet * set,
     CATreeBaseNode * node = &currentNode->baseOrRoute.base;
     CATreeLock * lock = &node->lock;
     DEBUG_PRINT(("put lock %p\n", currentNode));
-    //catree_lock(lock);
     bool contended;
     void * buff = LL_delegate_or_lock_keep_closed(&node->lock.lock, sizeof(put_message), &contended);
     if(buff == NULL){
@@ -1052,8 +1000,6 @@ void fpaslqdcatree_put_param(FPACATreeSet * set,
             //Retry
             DEBUG_PRINT(("put  invalid unlock %p\n", currentNode));
             catree_unlock(lock);
-            //drmcs_runlock(&set->globalLock);
-            //drmcs_rlock(&set->globalLock);
             goto insert_opt_start;
         }
     }else{
@@ -1070,8 +1016,6 @@ void fpaslqdcatree_put_param(FPACATreeSet * set,
         return;
     }
     if(contended){
-      //printf("P STACK POS %d\n", fpahelp_info.flush_stack_pos);
-      //fflush(stdout);
       LL_open_delegation_queue(&node->lock.lock);
       fpahelp_info.flush_stack[fpahelp_info.flush_stack_pos] = currentNode;
       fpahelp_info.flush_stack_pos++;
@@ -1091,7 +1035,6 @@ void fpaslqdcatree_put_param(FPACATreeSet * set,
       int current_stack_pos = 0;
       while(current_stack_pos < SKIPLIST_QDCATREE_MAX_FLUSH_STACK_SIZE &&
 	    current_stack_pos < fpahelp_info.flush_stack_pos){
-	//printf("PF STACK POS %d\n", current_stack_pos);
 	CATreeBaseNode * n =&fpahelp_info.flush_stack[current_stack_pos]->baseOrRoute.base;
 	LL_flush_delegation_queue(&n->lock.lock);
 	current_stack_pos++;
@@ -1103,10 +1046,6 @@ void fpaslqdcatree_put_param(FPACATreeSet * set,
     }else{
       fpahelp_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
     }
-    /* if(fpahelp_info.last_locked_node != fpahelp_info.current_help_node){ */
-    /*     DEBUG_PRINT(("not same as last node min unlock %p\n", currentNode)); */
-    /*     LL_unlock(&node->lock.lock); */
-    /* } */
     fpahelp_info.flush_stack_pos = 0;    
     adaptAndUnlock(set,
                    fpahelp_info.last_locked_node,
@@ -1143,7 +1082,6 @@ FPACATreeSet * fpaslqdcatree_new(){
 }
 
 /* int main(){ */
-/*     printf("THIS IS A TEST FUNCTION 2\n"); */
 /*     FPACATreeSet * l =  slcatree_new(); */
 /*     for(unsigned long val = 0; val < 20; val++){ */
 /*         slcatree_put(l, val, val); */
