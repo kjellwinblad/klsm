@@ -51,14 +51,14 @@ target_link_libraries(file_shortest_paths
     thread_local_ptr
     spraylist
     qdcatree
-    /usr/local/lib/libpapi.a
+    #/usr/local/lib/libpapi.a
 )
 
 add_executable(file_shortest_paths_seq_no_lazy_relax file_shortest_paths_seq_no_lazy_relax.cpp util.cpp)
 target_link_libraries(file_shortest_paths_seq_no_lazy_relax
     ${CMAKE_THREAD_LIBS_INIT}
     ${HWLOC_LIBRARIES}
-    /usr/local/lib/libpapi.a
+    #/usr/local/lib/libpapi.a
 )
 
 target_include_directories(file_shortest_paths_seq_no_lazy_relax PUBLIC

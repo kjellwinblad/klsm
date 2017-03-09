@@ -108,6 +108,8 @@ struct threads_waiting_to_succeed_pad {
 
 static threads_waiting_to_succeed_pad wt;
 
+static std::atomic<long> * threads_wait_switches;
+
 struct settings {
     int num_threads;
     std::string graph_file;
@@ -300,9 +302,85 @@ bench_thread(T *pq,
                 std::this_thread::yield();
             }
             if(!success){
-                //We give up... No work for us
-                break;
-            }           
+                /*
+                  Quite complex protocol to make sure threads don't
+                  quit when there are still nodes to process. It works
+                  as follows:
+
+                  A thread sets its slot in threads_wait_switches to 1
+                  and increments wt.threads_waiting_to_succeed if it
+                  has not succeeded in calling delete_min above. It
+                  then tries to call delete_min again and revert the
+                  changes to threads_wait_switches, decrements
+                  wt.threads_waiting_to_succeed and proceed as normal
+                  if the delete_min succeeded this time. Otherwise the
+                  thread increments wt.threads_waiting_to_succeed,
+                  sets its slot in threads_wait_switches to 2 and goes
+                  into a waiting state.
+
+                  A waiting thread waits until one of the following
+                  conditions are met:
+                  
+                  1. wt.threads_waiting_to_succeed is equal to the
+                  number of working threads times two. This means that
+                  after some time point after which no insert
+                  operation has been performed, all threads have
+                  called delete_min and no thread has succeeded. This
+                  guarantees that there is no more node to process in
+                  the priority queue provided that the priority queue
+                  has the property described in Theorem 4 in the
+                  LCPC'2016 publication "The Contention Avoiding
+                  Concurrent Priority Queue". To see why this is the
+                  case, check that if an insert happened after the
+                  last delete_min operation of any of the waiting
+                  threads then the thread performing the insert would
+                  have waken up all the waiting threads and decremented
+                  wt.threads_waiting_to_succeed so that it could not
+                  reach the number of threads times two.
+
+                  2. The thread's slot in threads_wait_switches is set
+                  to 0 by a thread that has just inserted an
+                  item. Note that the thread that set the slot to 0
+                  made sure that wt.threads_waiting_to_succeed counter
+                  got decremented by two before setting the slot to 0
+                  so it is impossible that
+                  wt.threads_waiting_to_succeed reach the number of
+                  waiting threads times two if not all threads are in
+                  waiting state.
+                */
+                //Tell other threads that we found nothing in the priority queue
+                threads_wait_switches[ 16 + thread_id ].store(1);
+                wt.threads_waiting_to_succeed.fetch_add(1);
+                if( ! pq->delete_min(distance, node) ) {
+                    int curr_value2 = wt.threads_waiting_to_succeed.fetch_add(1) + 1;
+                    threads_wait_switches[ 16 + thread_id ].store(2);
+                    while(true){
+                        if(curr_value2 == (2*number_of_threads)){
+                            // All threads have observed that
+                            // delete_min failed after some timepoint
+                            // after which no insert operation has
+                            // been performed. We are done!
+                            break;
+                        }
+                        if(threads_wait_switches[ 16 + thread_id ].load( std::memory_order_acquire) == 0 ){
+                            // A thread notified the current thread that something got inserted in the queue
+                            // Continue trying to delete_min
+                            success = true;
+                            break;
+                        }
+                        std::this_thread::yield();
+                        curr_value2 = wt.threads_waiting_to_succeed.load( std::memory_order_acquire );
+                    }
+                    if(!success){
+                        break;
+                    }else{
+                        continue;
+                    }
+                }else{
+                    wt.threads_waiting_to_succeed.fetch_sub(1);
+                    threads_wait_switches[ 16 + thread_id ].store(0);
+                }
+            }
         }
         vertex_t *v = &graph[node];
         const size_t v_dist = v->distance.load(std::memory_order_relaxed);
@@ -329,6 +407,29 @@ bench_thread(T *pq,
 
             if (dist_updated) {
                 pq->insert(new_dist, e->target);
+                if(wt.threads_waiting_to_succeed.load( std::memory_order_acquire ) > 0){
+                    // Notify threads that there is still work to do
+                    for(int i = 16; i < number_of_threads; i++){
+                        while(true){
+                            long currentValue = threads_wait_switches[i].load( std::memory_order_acquire );
+                            if(currentValue == 2) {
+                                // If the thread's slot has the value 2, it need to be notified
+                                long expected = 2;
+                                if(threads_wait_switches[i].compare_exchange_strong( expected, 3 )){
+                                    // If we succefully changed the thread's slot to 3,
+                                    // we will decrement wt.threads_waiting_to_succeed and notify the thread
+                                    wt.threads_waiting_to_succeed.fetch_sub(2);
+                                    threads_wait_switches[i].store(0 , std::memory_order_release);
+                                }
+                            } else if (currentValue == 0 && currentValue == 3) {
+                                // If the thread's slot has the value 0, it does not need to be notified
+                                // If the thread's slot has the value 3, another thread will notify the thread
+                                break;
+                            }
+                            std::this_thread::yield();
+                        }
+                    }
+                }
             }
         }
     }
@@ -481,6 +582,12 @@ main(int argc,
 
     number_of_threads =  s.num_threads;
 
+    // Padding + space for each thread
+    threads_wait_switches = new std::atomic<long>[32 + number_of_threads];
+    for(int i = 16; i < number_of_threads; i++){
+        threads_wait_switches[i].store(0);
+    }
+    
 #ifdef PAPI
   if (PAPI_VER_CURRENT != PAPI_library_init(PAPI_VER_CURRENT)){
     std::cout << ("PAPI_library_init error.\n");
