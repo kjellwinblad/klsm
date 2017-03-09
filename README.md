@@ -1,5 +1,5 @@
 This repository is a fork of the kpqueue repository by Jakob Gruber
-(https://github.com/schuay/kpqueue). I plan to merge relevant code
+(https://github.com/klsmpq/klsm/). I plan to merge relevant code
 into the kpqueue repository. Contact Kjell Winblad
 (kjell.winblad@it.uu.se) if you have questions about this.
 
