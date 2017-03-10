@@ -31,7 +31,6 @@
 #include "pqs/globallock.h"
 #include "pqs/multiq.h"
 #include "pqs/linden.h"
-#include "pqs/qdcatree.h"
 #include "pqs/fpaqdcatree.h"
 #include "pqs/spraylist.h"
 #include "dist_lsm/dist_lsm.h"
@@ -75,8 +74,6 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_FPAQDCATREENOPUTADAPT "fpaqdcatreenoputadapt"
 #define PQ_FPAQDCATREENORMMINADAPT "fpaqdcatreenormminadapt"
 #define PQ_FPAQDCATREENOCATREEADAPT "fpaqdcatreenocatreeadapt"
-#define PQ_RELAXED_QDCATREE "relaxedqdcatree"
-#define PQ_ADAPTIVE_RELAXED_QDCATREE "adaptiverelaxedqdcatree"
 /* Hack to support graphs that are badly formatted */
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
 /* hwloc does not work on all platforms */
@@ -126,7 +123,6 @@ struct edge_t {
 struct vertex_t {
     size_t num_edges;
     std::atomic<size_t> distance;
-  //bool processed;
     edge_t *edges;
 };
 
@@ -676,7 +672,7 @@ main(int argc,
         kpqbench::Linden pq(kpqbench::Linden::DEFAULT_OFFSET);
         ret = bench(&pq, s);
     } else if (s.type == PQ_QDCATREE) {
-        kpqbench::QDCATree pq;
+        kpqbench::FPAQDCATree<false,false,true> pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_FPAQDCATREE) {
         kpqbench::FPAQDCATree<true,true,true> pq;

@@ -38,7 +38,6 @@
 #include "pqs/sequence_heap.h"
 #include "pqs/skip_queue.h"
 #include "pqs/spraylist.h"
-#include "pqs/qdcatree.h"
 #include "dist_lsm/dist_lsm.h"
 #include "k_lsm/k_lsm.h"
 #include "multi_lsm/multi_lsm.h"
@@ -196,7 +195,7 @@ usage()
             "       pq: The data structure to use as the backing priority queue\n"
             "           (one of '%s', '%s', '%s', '%s', '%s', '%s',\n"
             "                   '%s', '%s', '%s', '%s', '%s', '%s',\n"
-            "                   '%s', '%s', '%s', '%s', '%s')\n",
+            "                   '%s', '%s', '%s', '%s')\n",
             DEFAULT_COUNTERS,
             DEFAULT_SIZE,
             KEYS_UNIFORM, KEYS_ASCENDING, KEYS_DESCENDING, KEYS_RESTRICTED_8, KEYS_RESTRICTED_16, DEFAULT_KEYS,
@@ -204,7 +203,7 @@ usage()
             DEFAULT_SEED,
             WORKLOAD_UNIFORM, WORKLOAD_SPLIT, WORKLOAD_PRODUCER, WORKLOAD_ALTERNATING, DEFAULT_WORKLOAD,
             PQ_CHEAP, PQ_DLSM, PQ_GLOBALLOCK, PQ_KLSM16, PQ_KLSM128, PQ_KLSM256, PQ_KLSM4096,
-            PQ_LINDEN, PQ_LSM, PQ_MLSM, PQ_MULTIQ, PQ_SEQUENCE, PQ_SKIP, PQ_SLSM, PQ_SPRAY, "nada", PQ_QDCATREE);
+            PQ_LINDEN, PQ_LSM, PQ_MLSM, PQ_MULTIQ, PQ_SEQUENCE, PQ_SKIP, PQ_SLSM, PQ_SPRAY, "nada");
     exit(EXIT_FAILURE);
 }
 
@@ -896,11 +895,6 @@ main(int argc,
 #ifndef ENABLE_QUALITY
     } else if (settings.type == PQ_SPRAY) {
         kpqbench::spraylist pq;
-        ret = bench(&pq, settings);
-#endif
-#ifndef ENABLE_QUALITY
-    } else if (settings.type == PQ_QDCATREE) {
-        kpqbench::QDCATree pq;           
         ret = bench(&pq, settings);
 #endif
     } else {

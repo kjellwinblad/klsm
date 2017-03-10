@@ -69,7 +69,6 @@ add_library(qdcatree STATIC
     ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/tatas_lock.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/gc.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/ptst.c
-    qdcatree.cpp
 
 )
 set_target_properties(qdcatree PROPERTIES COMPILE_FLAGS
