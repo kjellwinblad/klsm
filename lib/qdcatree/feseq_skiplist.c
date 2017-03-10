@@ -393,7 +393,7 @@ SkiplistNode * skiplist_remove_head_nodes(Skiplist * skiplist, int number_of_nod
             current_last_node = current_last_node->lower_lists[current_last_node->num_of_levels - 1];
             current_number_of_nodes_fetched++;
         }while(current_number_of_nodes_fetched < number_of_nodes &&
-               current_last_node->info & SKIPLIST_RIGHT_BORDER_NODE != 1);
+               current_last_node->info != SKIPLIST_RIGHT_BORDER_NODE);
         prev_last_node->lower_lists[prev_last_node->num_of_levels - 1] = NULL;
         return firstCandidate;
     }
