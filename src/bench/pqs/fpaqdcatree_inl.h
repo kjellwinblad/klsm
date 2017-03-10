@@ -3,7 +3,7 @@
 
 extern "C" {
 #include "skiplist_fpaqdcatree_set.h"
-#include "linden/gc/gc.h"
+#include "spraylist/gc/gc.h"
 }
 
 

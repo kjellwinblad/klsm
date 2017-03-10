@@ -17,11 +17,23 @@
 
 /* #define SSALLOC_USE_MALLOC */
 
-#define SSALLOC_NUM_ALLOCATORS 4
-#define SSALLOC_SIZE (1024LL * 1024 * 1024)
+#define SSALLOC_NUM_ALLOCATORS 2
+
+#undef LAPTOP
+
+#if defined(__sparc__)
+#  define SSALLOC_SIZE (128 * 1024 * 1024)
+#elif defined(__tile__)
+#  define SSALLOC_SIZE (100 * 1024 * 1024)
+#elif defined(LAPTOP)
+#  define SSALLOC_SIZE (100 * 1024 * 1024)
+#else
+#  define SSALLOC_SIZE (1024 * 1024 * 1024)
+#endif
+#define SSALLOC_SIZE_ALL (size_t)((size_t)10 * (size_t)1024 * (size_t)1024 * (size_t)1024)
 
 /* extern const size_t ssalloc_size_alloc[SSALLOC_NUM_ALLOCATORS]; */
-
+#define LAPTOP
 
 void ssalloc_set(void* mem);
 void ssalloc_init();

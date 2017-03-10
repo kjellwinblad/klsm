@@ -1,10 +1,10 @@
 #include "spraylist.h"
 
 extern "C" {
-#include "spraylist2/include/random.h"
-#include "spraylist2/intset.h"
-#include "spraylist2/linden.h"
-#include "spraylist2/pqueue.h"
+#include "spraylist/include/random.h"
+#include "spraylist/intset.h"
+#include "spraylist/linden.h"
+#include "spraylist/pqueue.h"
 #include "ssalloc.h"
 }
 

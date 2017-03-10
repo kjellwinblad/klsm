@@ -2,7 +2,7 @@
 
 extern "C" {
 #include "skiplist_cachedqdcatree_set.h"
-#include "linden/gc/gc.h"
+#include "spraylist/gc/gc.h"
 }
 
 namespace kpqbench

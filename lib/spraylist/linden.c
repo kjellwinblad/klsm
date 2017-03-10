@@ -54,7 +54,7 @@
 
 
 /* thread state. */
-__thread ptst_t *ptst = NULL;
+__thread ptst_t *ptst;
 
 static int gc_id[NUM_LEVELS];
 
@@ -131,7 +131,6 @@ locate_preds(pq_t *pq, pkey_t k, node_t **preds, node_t **succs)
     d = is_marked_ref(x_next);
     x_next = get_unmarked_ref(x_next);
     assert(x_next != NULL);
-
     while (x_next->k < k || is_marked_ref(x_next->next[0]) 
         || ((i == 0) && d)) {
       /* Record bottom level deleted node not having delete flag 
@@ -289,9 +288,6 @@ restructure(pq_t *pq)
 }
 
 
-pval_t
-deletemin_key(pq_t *pq, pkey_t *key);
-
 /* deletemin
  *
  * Delete element with smallest key in queue.
@@ -300,14 +296,14 @@ deletemin_key(pq_t *pq, pkey_t *key);
  * Traverse level 0 next pointers until one is found that does
  * not have the delete bit set. 
  */
-  pval_t
-deletemin(pq_t *pq) {
+pval_t
+deletemin(pq_t *pq/*, thread_data_t *d*/) {
   pkey_t key;
-  return deletemin_key(pq, &key);
+  return deletemin_key(pq, &key/*, d*/);
 }
 
   pval_t
-deletemin_key(pq_t *pq, pkey_t *key) {
+deletemin_key(pq_t *pq, pkey_t *key/*, thread_data_t *d*/) {
   pval_t   v = 0;
   node_t *x, *nxt, *obs_head = NULL, *newhead, *cur;
   int offset, lvl;
@@ -414,8 +410,10 @@ pq_init(int max_offset)
   h->level = NUM_LEVELS;
   t->level = NUM_LEVELS;
 
-  for ( i = 0; i < NUM_LEVELS; i++ )
+  for ( i = 0; i < NUM_LEVELS; i++ ){
     h->next[i] = t;
+    t->next[i] = NULL;
+  }
 
   pq = malloc(sizeof *pq);
   pq->head = h;
