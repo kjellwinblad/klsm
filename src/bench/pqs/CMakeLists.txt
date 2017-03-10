@@ -70,8 +70,7 @@ add_library(qdcatree STATIC
     ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/gc.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/ptst.c
     qdcatree.cpp
-    cachedqdcatree.cpp
-    adaptivecachedqdcatree.cpp
+
 )
 set_target_properties(qdcatree PROPERTIES COMPILE_FLAGS
     "-w -std=gnu11 -DINTEL -DCACHE_LINE_SIZE=${CACHE_LINE_SIZE}"

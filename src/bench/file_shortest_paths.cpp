@@ -32,9 +32,7 @@
 #include "pqs/multiq.h"
 #include "pqs/linden.h"
 #include "pqs/qdcatree.h"
-#include "pqs/cachedqdcatree.h"
 #include "pqs/fpaqdcatree.h"
-#include "pqs/adaptivecachedqdcatree.h"
 #include "pqs/spraylist.h"
 #include "dist_lsm/dist_lsm.h"
 #include "k_lsm/k_lsm.h"
@@ -691,18 +689,6 @@ main(int argc,
         ret = bench(&pq, s);
     } else if (s.type == PQ_FPAQDCATREENOCATREEADAPT) {
         kpqbench::FPAQDCATree<true,true,false> pq;
-        ret = bench(&pq, s);
-    } else if (s.type == PQ_RELAXED_QDCATREE) {
-        kpqbench::CachedQDCATree pq;
-        /*Insert too many start nodes may result in some
-          wasted work but is still correct*/
-        pq.insert((size_t)0, (size_t)0);
-        pq.flush_insert_cache();
-        ret = bench(&pq, s);
-    } else if (s.type == PQ_ADAPTIVE_RELAXED_QDCATREE) {
-        kpqbench::AdaptiveCachedQDCATree pq;
-        pq.insert((size_t)0, (size_t)0);
-        pq.flush_insert_cache();
         ret = bench(&pq, s);
     }
     else {
