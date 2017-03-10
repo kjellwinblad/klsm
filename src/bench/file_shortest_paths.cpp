@@ -421,7 +421,7 @@ bench_thread(T *pq,
                                     wt.threads_waiting_to_succeed.fetch_sub(2);
                                     threads_wait_switches[i].store(0 , std::memory_order_release);
                                 }
-                            } else if (currentValue == 0 && currentValue == 3) {
+                            } else if (currentValue == 0 || currentValue == 3) {
                                 // If the thread's slot has the value 0, it does not need to be notified
                                 // If the thread's slot has the value 3, another thread will notify the thread
                                 break;
