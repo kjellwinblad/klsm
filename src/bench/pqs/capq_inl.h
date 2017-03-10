@@ -1,4 +1,4 @@
-#include "fpaqdcatree.h"
+#include "capq.h"
 #include <iostream>
 
 extern "C" {
@@ -25,7 +25,7 @@ qdcatree_insert(FPASLCATreeSet *pq,
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::FPAQDCATree()
+CAPQ<remove_min_relax, put_relax, catree_adapt>::CAPQ()
 {
     _init_gc_subsystem();
     init_thread(1);
@@ -34,21 +34,21 @@ FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::FPAQDCATree()
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::~FPAQDCATree()
+CAPQ<remove_min_relax, put_relax, catree_adapt>::~CAPQ()
 {
 
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::init_thread(const size_t nthreads)
+CAPQ<remove_min_relax, put_relax, catree_adapt>::init_thread(const size_t nthreads)
 {
     (void)nthreads;
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::insert(const uint32_t &key,
+CAPQ<remove_min_relax, put_relax, catree_adapt>::insert(const uint32_t &key,
                                                                const uint32_t &value)
 {
     qdcatree_insert(m_q->pq, key, value);
@@ -56,7 +56,7 @@ FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::insert(const uint32_t &k
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::insert(const size_t &key,
+CAPQ<remove_min_relax, put_relax, catree_adapt>::insert(const size_t &key,
                                                                const size_t &value)
 {
     fpaslqdcatree_put_param(m_q->pq,
@@ -67,14 +67,14 @@ FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::insert(const size_t &key
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::flush_insert_cache()
+CAPQ<remove_min_relax, put_relax, catree_adapt>::flush_insert_cache()
 {
     fpaslqdcatree_put_flush(m_q->pq);
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 bool
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::delete_min(uint32_t &v)
+CAPQ<remove_min_relax, put_relax, catree_adapt>::delete_min(uint32_t &v)
 {
     unsigned long key_write_back;
     v = (uint32_t)fpaslqdcatree_remove_min(m_q->pq, &key_write_back);
@@ -83,7 +83,7 @@ FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::delete_min(uint32_t &v)
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 bool
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::delete_min(size_t &k, size_t &v)
+CAPQ<remove_min_relax, put_relax, catree_adapt>::delete_min(size_t &k, size_t &v)
 {
     unsigned long key_write_back;
     v = (size_t)fpaslqdcatree_remove_min_param(m_q->pq, &key_write_back, remove_min_relax, put_relax, catree_adapt);
@@ -93,13 +93,13 @@ FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::delete_min(size_t &k, si
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::signal_no_waste()
+CAPQ<remove_min_relax, put_relax, catree_adapt>::signal_no_waste()
 {
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
-FPAQDCATree<remove_min_relax, put_relax, catree_adapt>::signal_waste()
+CAPQ<remove_min_relax, put_relax, catree_adapt>::signal_waste()
 {
 }
 

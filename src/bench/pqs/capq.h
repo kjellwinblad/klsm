@@ -1,5 +1,5 @@
-#ifndef __FPAQDCATREE_H
-#define __FPAQDCATREE_H
+#ifndef __CAPQ_H
+#define __CAPQ_H
 
 #include <cstddef>
 #include <cstdint>
@@ -10,11 +10,11 @@ namespace kpqbench
 struct fpaqdcatree_t;
 
 template <bool remove_min_relax = true, bool put_relax = true, bool catree_adapt = true>
-class FPAQDCATree
+class CAPQ
 {
 public:
-    FPAQDCATree();
-    virtual ~FPAQDCATree();
+    CAPQ();
+    virtual ~CAPQ();
 
     void insert(const uint32_t &key, const uint32_t &value);
     void insert(const size_t &key, const size_t &value);
@@ -32,7 +32,7 @@ private:
     fpaqdcatree_t *m_q;
 };
 
-#include "fpaqdcatree_inl.h"
+#include "capq_inl.h"
 }
 
-#endif /* __FPAQDCATREE_H */
+#endif /* __CAPQ_H */

@@ -31,7 +31,7 @@
 #include "pqs/globallock.h"
 #include "pqs/multiq.h"
 #include "pqs/linden.h"
-#include "pqs/fpaqdcatree.h"
+#include "pqs/capq.h"
 #include "pqs/spraylist.h"
 #include "dist_lsm/dist_lsm.h"
 #include "k_lsm/k_lsm.h"
@@ -69,11 +69,10 @@ static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 #define PQ_MULTIQC256   "multiqC256"
 #define PQ_LINDEN     "linden"
 #define PQ_SPRAYLIST  "spraylist"
-#define PQ_QDCATREE   "qdcatree"
-#define PQ_FPAQDCATREE "fpaqdcatree"
-#define PQ_FPAQDCATREENOPUTADAPT "fpaqdcatreenoputadapt"
-#define PQ_FPAQDCATREENORMMINADAPT "fpaqdcatreenormminadapt"
-#define PQ_FPAQDCATREENOCATREEADAPT "fpaqdcatreenocatreeadapt"
+#define PQ_CAPQ "capq"     // CA-PQ in "The Contention Avoiding Concurrent Priority Queue" LCPC'2016
+#define PQ_CADM "cadm"     // CA-DM in  ...
+#define PQ_CAIN "cain"     // CA-IN in  ...
+#define PQ_CATREE "catree" // CATree in ...
 /* Hack to support graphs that are badly formatted */
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
 /* hwloc does not work on all platforms */
@@ -671,20 +670,17 @@ main(int argc,
     } else if (s.type == PQ_LINDEN) {
         kpqbench::Linden pq(kpqbench::Linden::DEFAULT_OFFSET);
         ret = bench(&pq, s);
-    } else if (s.type == PQ_QDCATREE) {
-        kpqbench::FPAQDCATree<false,false,true> pq;
+    }  else if (s.type == PQ_CAPQ) {
+        kpqbench::CAPQ<true,true,true> pq;
         ret = bench(&pq, s);
-    } else if (s.type == PQ_FPAQDCATREE) {
-        kpqbench::FPAQDCATree<true,true,true> pq;
+    }  else if (s.type == PQ_CADM) {
+        kpqbench::CAPQ<true,false,true> pq;
         ret = bench(&pq, s);
-    }  else if (s.type == PQ_FPAQDCATREENOPUTADAPT) {
-        kpqbench::FPAQDCATree<true,false,true> pq;
+    } else if (s.type == PQ_CAIN) {
+        kpqbench::CAPQ<false,true,true> pq;
         ret = bench(&pq, s);
-    } else if (s.type == PQ_FPAQDCATREENORMMINADAPT) {
-        kpqbench::FPAQDCATree<false,true,true> pq;
-        ret = bench(&pq, s);
-    } else if (s.type == PQ_FPAQDCATREENOCATREEADAPT) {
-        kpqbench::FPAQDCATree<true,true,false> pq;
+    } else if (s.type == PQ_CATREE) {
+        kpqbench::CAPQ<false,false,true> pq;
         ret = bench(&pq, s);
     }
     else {
