@@ -44,6 +44,7 @@
 constexpr int DEFAULT_NTHREADS   = 1;
 constexpr int DEFAULT_RELAXATION = 256;
 constexpr int DEFAULT_SEED       = 0;
+constexpr int ARRAY_PADDING       = 16;
 static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 
 #define PQ_DLSM       "dlsm"
@@ -262,9 +263,7 @@ bench_thread(T *pq,
              vertex_t *graph,
              unsigned long *nodes_processed_writeback)
 {
-    (void)thread_id;
     unsigned long nodes_processed = 0;
-    //bool record_processed = false;
 #ifdef MANUAL_PINNING
     int cpu = 4*(thread_id%16) + thread_id/16;
     cpu_set_t cpuset;
@@ -349,11 +348,11 @@ bench_thread(T *pq,
                   waiting state.
                 */
                 //Tell other threads that we found nothing in the priority queue
-                threads_wait_switches[ 16 + thread_id ].store(1);
+                threads_wait_switches[ ARRAY_PADDING + thread_id ].store(1);
                 wt.threads_waiting_to_succeed.fetch_add(1);
                 if( ! pq->delete_min(distance, node) ) {
                     int curr_value2 = wt.threads_waiting_to_succeed.fetch_add(1) + 1;
-                    threads_wait_switches[ 16 + thread_id ].store(2);
+                    threads_wait_switches[ ARRAY_PADDING + thread_id ].store(2);
                     while(true){
                         if(curr_value2 == (2*number_of_threads)){
                             // All threads have observed that
@@ -362,7 +361,7 @@ bench_thread(T *pq,
                             // been performed. We are done!
                             break;
                         }
-                        if(threads_wait_switches[ 16 + thread_id ].load( std::memory_order_acquire) == 0 ){
+                        if(threads_wait_switches[ ARRAY_PADDING + thread_id ].load( std::memory_order_acquire) == 0 ){
                             // A thread notified the current thread that something got inserted in the queue
                             // Continue trying to delete_min
                             success = true;
@@ -378,7 +377,7 @@ bench_thread(T *pq,
                     }
                 }else{
                     wt.threads_waiting_to_succeed.fetch_sub(1);
-                    threads_wait_switches[ 16 + thread_id ].store(0);
+                    threads_wait_switches[ ARRAY_PADDING + thread_id ].store(0);
                 }
             }
         }
@@ -409,7 +408,7 @@ bench_thread(T *pq,
                 pq->insert(new_dist, e->target);
                 if(wt.threads_waiting_to_succeed.load( std::memory_order_acquire ) > 0){
                     // Notify threads that there is still work to do
-                    for(int i = 16; i < number_of_threads; i++){
+                    for(int i = ARRAY_PADDING; i < number_of_threads; i++){
                         while(true){
                             long currentValue = threads_wait_switches[i].load( std::memory_order_acquire );
                             if(currentValue == 2) {
@@ -583,8 +582,8 @@ main(int argc,
     number_of_threads =  s.num_threads;
 
     // Padding + space for each thread
-    threads_wait_switches = new std::atomic<long>[32 + number_of_threads];
-    for(int i = 16; i < number_of_threads; i++){
+    threads_wait_switches = new std::atomic<long>[ARRAY_PADDING*2 + number_of_threads];
+    for(int i = ARRAY_PADDING; i < number_of_threads; i++){
         threads_wait_switches[i].store(0);
     }
     
