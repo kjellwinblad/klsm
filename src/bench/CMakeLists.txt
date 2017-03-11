@@ -21,7 +21,7 @@ target_link_libraries(random
     ${CMAKE_THREAD_LIBS_INIT}
     ${HWLOC_LIBRARIES}
     linden
-    qdcatree
+    capq
     sequence_heap
     sequential_lsm
     skip_queue
@@ -50,7 +50,7 @@ target_link_libraries(file_shortest_paths
     skip_queue
     thread_local_ptr
     spraylist
-    qdcatree
+    capq
     #/usr/local/lib/libpapi.a
 )
 

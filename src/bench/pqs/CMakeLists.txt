@@ -58,25 +58,20 @@ target_include_directories(spraylist PUBLIC
 )
 
 
-add_library(qdcatree STATIC
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_qdcatree_set.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_fpaqdcatree_set.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_cachedqdcatree_set.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_adaptivecachedqdcatree_set.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/skiplist_fpaqdcatree_set.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/feseq_skiplist.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/qd_lock.c
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc/locks/tatas_lock.c
+add_library(capq STATIC
+    ${CMAKE_SOURCE_DIR}/lib/capq/skiplist_fpaqdcatree_set.c
+    ${CMAKE_SOURCE_DIR}/lib/capq/feseq_skiplist.c
+    ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc/locks/qd_lock.c
+    ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc/locks/tatas_lock.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/gc.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/ptst.c
-
 )
-set_target_properties(qdcatree PROPERTIES COMPILE_FLAGS
+set_target_properties(capq PROPERTIES COMPILE_FLAGS
     "-w -std=gnu11 -DINTEL -DCACHE_LINE_SIZE=${CACHE_LINE_SIZE}"
 )
-target_include_directories(qdcatree PUBLIC
+target_include_directories(capq PUBLIC
     ${CMAKE_SOURCE_DIR}/lib
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree
-    ${CMAKE_SOURCE_DIR}/lib/qdcatree/catreesrc
+    ${CMAKE_SOURCE_DIR}/lib/capq
+    ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc
     ${CMAKE_SOURCE_DIR}/lib/spraylist
 )
