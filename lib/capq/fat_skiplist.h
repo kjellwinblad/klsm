@@ -1,9 +1,8 @@
-#ifndef __SKIPLIST_H__
-#define __SKIPLIST_H__
+#ifndef __FAT_SKIPLIST_H__
+#define __FAT_SKIPLIST_H__
 
 #include <stdbool.h>
 
-//#include "include/ssalloc.h"
 /* #define SKIPLIST_MALLOC(size) ssalloc_alloc(1, size); */
 /* #define SKIPLIST_FREE(data) ; */
 

@@ -63,8 +63,8 @@ add_library(capq STATIC
     ${CMAKE_SOURCE_DIR}/lib/capq/fat_skiplist.c
     ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc/locks/qd_lock.c
     ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc/locks/tatas_lock.c
-    ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/gc.c
-    ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/ptst.c
+    ${CMAKE_SOURCE_DIR}/lib/capq/gc/gc.c
+    ${CMAKE_SOURCE_DIR}/lib/capq/gc/ptst.c
 )
 set_target_properties(capq PROPERTIES COMPILE_FLAGS
     "-w -std=gnu11 -DINTEL -DCACHE_LINE_SIZE=${CACHE_LINE_SIZE}"
@@ -73,5 +73,4 @@ target_include_directories(capq PUBLIC
     ${CMAKE_SOURCE_DIR}/lib
     ${CMAKE_SOURCE_DIR}/lib/capq
     ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc
-    ${CMAKE_SOURCE_DIR}/lib/spraylist
 )
