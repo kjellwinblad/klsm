@@ -1,4 +1,4 @@
-#include "skiplist_fpaqdcatree_set.h"
+#include "capq.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -9,7 +9,7 @@
 #include "misc/thread_includes.h"
 #include "misc/padded_types.h"
 #include "locks/locks.h"
-#include "feseq_skiplist.h"
+#include "fat_skiplist.h"
 #include "gc/ptst.h"
 #include "binheap.h"
 

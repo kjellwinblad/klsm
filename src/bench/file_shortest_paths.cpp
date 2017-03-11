@@ -31,7 +31,7 @@
 #include "pqs/globallock.h"
 #include "pqs/multiq.h"
 #include "pqs/linden.h"
-#include "pqs/capq.h"
+#include "pqs/cppcapq.h"
 #include "pqs/spraylist.h"
 #include "dist_lsm/dist_lsm.h"
 #include "k_lsm/k_lsm.h"

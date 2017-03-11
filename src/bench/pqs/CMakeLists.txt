@@ -59,8 +59,8 @@ target_include_directories(spraylist PUBLIC
 
 
 add_library(capq STATIC
-    ${CMAKE_SOURCE_DIR}/lib/capq/skiplist_fpaqdcatree_set.c
-    ${CMAKE_SOURCE_DIR}/lib/capq/feseq_skiplist.c
+    ${CMAKE_SOURCE_DIR}/lib/capq/capq.c
+    ${CMAKE_SOURCE_DIR}/lib/capq/fat_skiplist.c
     ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc/locks/qd_lock.c
     ${CMAKE_SOURCE_DIR}/lib/capq/qdlocksrc/locks/tatas_lock.c
     ${CMAKE_SOURCE_DIR}/lib/spraylist/gc/gc.c

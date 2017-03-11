@@ -3,12 +3,8 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <limits.h>
-#include "feseq_skiplist.h"
+#include "fat_skiplist.h"
 
-
-//#include "ssalloc.h"
-
-#include "feseq_skiplist.h"
 /*
  * ========================
  * Internal data structures

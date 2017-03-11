@@ -1,8 +1,8 @@
-#include "capq.h"
+#include "cppcapq.h"
 #include <iostream>
 
 extern "C" {
-#include "skiplist_fpaqdcatree_set.h"
+#include "capq.h"
 #include "spraylist/gc/gc.h"
 }
 

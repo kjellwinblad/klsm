@@ -1,5 +1,5 @@
-#ifndef __CAPQ_H
-#define __CAPQ_H
+#ifndef __CPPCAPQ_H
+#define __CPPCAPQ_H
 
 #include <cstddef>
 #include <cstdint>
@@ -35,4 +35,4 @@ private:
 #include "capq_inl.h"
 }
 
-#endif /* __CAPQ_H */
+#endif /* __CPPCAPQ_H */
