@@ -1,8 +1,8 @@
 #include "linden.h"
 
 extern "C" {
-#include "spraylist/gc/gc.h"
-#include "spraylist/linden.h"
+#include "spraylist_linden/gc/gc.h"
+#include "spraylist_linden/linden.h"
 }
 
 namespace kpqbench

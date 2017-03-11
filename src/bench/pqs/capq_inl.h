@@ -3,7 +3,7 @@
 
 extern "C" {
 #include "capq.h"
-#include "spraylist/gc/gc.h"
+#include "capq/gc/gc.h"
 }
 
 
