@@ -17,6 +17,14 @@
  *  along with kpqueue.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+  This file contains an implementation of the contention avoiding
+  priority queue (CA-PQ). CA-PQ is described in the paper "The
+  Contention Avoiding Concurrent Priority Queue" which is published in
+  the 29th International Workshop on Languages and Compilers for
+  Parallel Computing (LCPC 2016).
+*/
+
 #include "capq.h"
 
 #include <limits.h>
