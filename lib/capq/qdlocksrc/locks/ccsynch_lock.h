@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Kjell Winblad
+ *  Copyright 2017 Kjell Winblad (http://winsh.me, kjellwinblad@gmail.com)
  *
  *  This file is part of qd_lock_lib.
  *
