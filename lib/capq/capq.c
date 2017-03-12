@@ -737,7 +737,7 @@ void perform_remove_min_with_lock(fpadelete_min_write_back_mem_type *mem)
             mem->value = (unsigned long) - 1;
             atomic_store_explicit(&mem->response, 0, memory_order_release);
         } else {
-            mem->key = remove_head;
+            mem->key = (unsigned long)remove_head;
             atomic_store_explicit(&mem->response, 1, memory_order_release);
         }
     }

@@ -317,7 +317,7 @@ void insert_sublist(SkiplistNode *skiplist,
  *================
  */
 
-static
+static inline
 void skiplist_print(Skiplist *skiplist)
 {
     SkiplistNode *head_node = &(skiplist->head_node);
@@ -345,7 +345,7 @@ void skiplist_print(Skiplist *skiplist)
     printf("PRINT SL END ==================\n");
 }
 
-static
+static inline
 void validate(Skiplist *skiplist)
 {
     SkiplistNode *head_node = &(skiplist->head_node);
@@ -500,7 +500,7 @@ static inline int find_split_pos(SkiplistNode *node)
     return 0;
 }
 
-static inline int move_items_from_full(SkiplistNode *from, SkiplistNode *to, int number_of_items)
+static inline void move_items_from_full(SkiplistNode *from, SkiplistNode *to, int number_of_items)
 {
     for (int i = 0; i < number_of_items; i++) {
         to->key_values[SKIPLIST_MAX_VALUSES_IN_NODE - number_of_items + i] =
@@ -511,7 +511,7 @@ static inline int move_items_from_full(SkiplistNode *from, SkiplistNode *to, int
     to->max_key = to->key_values[SKIPLIST_MAX_VALUSES_IN_NODE - 1].key;
 }
 
-static inline int move_items(SkiplistNode *from, SkiplistNode *to, int number_of_items)
+static inline void move_items(SkiplistNode *from, SkiplistNode *to, int number_of_items)
 {
     for (int i = from->first_key_value_pos; i < from->first_key_value_pos + number_of_items; i++) {
         to->key_values[SKIPLIST_MAX_VALUSES_IN_NODE - number_of_items + (i - from->first_key_value_pos)] =
