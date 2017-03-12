@@ -3,9 +3,6 @@
 
 #include <stdbool.h>
 
-/* #define SKIPLIST_MALLOC(size) ssalloc_alloc(1, size); */
-/* #define SKIPLIST_FREE(data) ; */
-
 #ifndef SKIPLIST_MALLOC
 #define SKIPLIST_MALLOC(size) malloc(size)
 #endif

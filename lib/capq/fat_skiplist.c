@@ -11,14 +11,9 @@
  * ========================
  */
 
-
-
 #define SKIPLIST_NORMAL_NODE 1
 #define SKIPLIST_LEFT_BORDER_NODE 1 << 2
 #define SKIPLIST_RIGHT_BORDER_NODE 1 << 1
-
-
-
 
 typedef struct skiplist {
     SkiplistNode head_node;
@@ -34,6 +29,16 @@ struct find_result {
     SkiplistNode * neigbours_after[SKIPLIST_NUM_OF_LEVELS];    
 };
 
+struct thread_local_rand_state
+{
+    char pad1[56];
+    unsigned int rand;
+    char pad2[64];
+};
+
+__thread struct thread_local_rand_state local_random_state = {.rand = 0};
+
+#define SKIPLIST_USE_LOCAL_RANDOM 1
 
 /*
  * ==================
@@ -80,8 +85,8 @@ void quick_sort (KeyValueItem  *a, int n) {
     quick_sort(a + i, n - i);
 }
 
-
-static inline void sort_node(SkiplistNode * node) {
+static inline
+void sort_node(SkiplistNode * node) {
     if(! node->sorted){
         node->sorted = true;
         quick_sort(&node->key_values[node->first_key_value_pos],
@@ -103,16 +108,6 @@ SkiplistNode* create_skiplist_node(int num_of_levels){
     return skiplist;
 }
 
-struct thread_local_rand_state
-{
-    char pad1[56];
-    unsigned int rand;
-    char pad2[64];
-};
-
-__thread struct thread_local_rand_state local_random_state = {.rand = 0};
-
-#define SKIPLIST_USE_LOCAL_RANDOM 1
 static inline 
 int random_level(int num_of_levels){
 #ifdef SKIPLIST_USE_LOCAL_RANDOM
@@ -140,7 +135,6 @@ int random_level(int num_of_levels){
 #endif
     return 0;
 }
-
 
 static inline 
 struct one_level_find_result find_neigbours_1_level(SkiplistNode* skiplist,
@@ -284,6 +278,12 @@ void insert_sublist(SkiplistNode* skiplist,
     }
 }
 
+/*
+ *================
+ * Debug functions
+ *================
+ */
+
 static
 void skiplist_print(Skiplist * skiplist){
     SkiplistNode * head_node = &(skiplist->head_node);
@@ -310,7 +310,6 @@ void skiplist_print(Skiplist * skiplist){
     printf("PRINT SL END ==================\n");
 }
 
-
 static
 void validate(Skiplist * skiplist){
     SkiplistNode * head_node = &(skiplist->head_node);
@@ -333,7 +332,6 @@ void validate(Skiplist * skiplist){
  * Public interface
  *=================
  */
-
 
 unsigned long skiplist_remove_min(Skiplist * skiplist, unsigned long * key_write_back){
     SkiplistNode * head_node = &(skiplist->head_node);
@@ -414,9 +412,6 @@ static inline
 void skiplist_insert_into_non_full_node_no_sort(SkiplistNode * node,
                                                 unsigned long key,
                                                 unsigned long value){
-    /* skiplist_insert_into_non_full_node(node, */
-    /*                                    key, */
-    /*                                    value); */
     if(node->sorted){
         node->sorted = false;
     }
@@ -497,7 +492,6 @@ static inline void do_split(SkiplistNode * left, SkiplistNode * right,
     }
 }
 
-
 void skiplist_put(Skiplist * skiplist, unsigned long key, unsigned long value){
     SkiplistNode * head_node = &(skiplist->head_node);
     struct find_result neigbours = find_neigbours(head_node, key);
@@ -536,12 +530,10 @@ void skiplist_put(Skiplist * skiplist, unsigned long key, unsigned long value){
     }
 }
 
-
 bool skiplist_is_empty(Skiplist * skiplist){
     SkiplistNode * head_node = &(skiplist->head_node);
     return head_node->lower_lists[head_node->num_of_levels -1]->info == SKIPLIST_RIGHT_BORDER_NODE;
 }
-
 
 unsigned long skiplist_max_key(Skiplist * skiplist){
     SkiplistNode * head_node = &(skiplist->head_node);
@@ -652,8 +644,6 @@ unsigned long skiplist_split(Skiplist * skiplist,
     return split_key;
 }
 
-
-
 Skiplist * skiplist_join(Skiplist * left_skiplist,
                          Skiplist * right_skiplist){
 
@@ -695,10 +685,6 @@ Skiplist * skiplist_join(Skiplist * left_skiplist,
     return left_skiplist;
 }
 
-
-
-
-
 Skiplist * new_skiplist(){
     Skiplist * skiplist = SKIPLIST_MALLOC(sizeof(Skiplist) + 
                                           sizeof(SkiplistNode*) * (SKIPLIST_NUM_OF_LEVELS));
@@ -721,7 +707,6 @@ Skiplist * new_skiplist(){
     return skiplist;
 }
 
-
 void skiplist_delete(Skiplist * skiplist){
     
     SkiplistNode * head_node = &(skiplist->head_node);
@@ -739,9 +724,6 @@ void skiplist_delete(Skiplist * skiplist){
 
     return;
 }
-
-
-
 
 /* int main(int argc, char *argv[]) { */
 /*     //ssalloc_init(); */

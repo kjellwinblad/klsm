@@ -52,6 +52,9 @@
 #define REMOVE_MIN_HIGH_CONTENTION_INCREASE 250
 #define REMOVE_MIN_LOW_CONTENTION_DECREASE 1
 
+/* More constants related to the skiplist node size and node memory
+   management are located in fat_skiplist.h */
+
 // Garbage collection related
 
 static int gc_id;
@@ -324,9 +327,9 @@ bool contention_reduce_split(CATreeBaseOrRouteNode *  baseNodeContainer,
     CATreeBaseOrRouteNode * newRoute = allocate_route_node(splitKey,
                                                            allocate_base_node(newLeft),
                                                            allocate_base_node(newRight));
-    //Link in new route
+    // Link in new route
     *parent = newRoute;
-    //Unlock threads waiting for old node
+    // Unlock threads waiting for old node
     node->valid = false;
     DEBUG_PRINT(("split unlock %p\n", baseNodeContainer));
     catree_unlock(&node->lock);
@@ -384,7 +387,6 @@ CATreeBaseOrRouteNode * find_parent_of(CATreeBaseOrRouteNode * container,
     return prevNode;
 }
 
-
 static inline
 bool low_contention_join(CATreeBaseOrRouteNode *  baseNodeContainer,
                          CATreeBaseOrRouteNode * parentRoute,
@@ -438,10 +440,10 @@ bool low_contention_join(CATreeBaseOrRouteNode *  baseNodeContainer,
         newNeighbourBase->root = skiplist_join(leftBase->root,
                                                rightBase->root);
     }
-    //Take out the node
-    //Lock parent
+    // Take out the node
+    // Lock parent
     LL_lock(&parent->lock);
-    //Find parent of parent and lock if posible
+    // Find parent of parent and lock if posible
     CATreeBaseOrRouteNode * parentOfParentRoute = NULL;
     do{
         if(parentOfParentRoute != NULL){
@@ -452,13 +454,13 @@ bool low_contention_join(CATreeBaseOrRouteNode *  baseNodeContainer,
                            parent->key,
                            set);
         if(parentOfParentRoute == NULL){
-            //Parent of parent is root, we are safe becaue it can't be deleted
+            // Parent of parent is root, we are safe becaue it can't be deleted
             break;
         }
         LL_lock(&parentOfParentRoute->baseOrRoute.route.lock);
     }while(!parentOfParentRoute->baseOrRoute.route.valid);
-    //Parent and parent of parent is safe
-    //We can now unlink the parent route 
+    // Parent and parent of parent is safe
+    // We can now unlink the parent route 
     CATreeBaseOrRouteNode ** parentInLinkPtrPtr = NULL;
     if(parentOfParentRoute == NULL){
         parentInLinkPtrPtr = &set->root;
@@ -472,14 +474,14 @@ bool low_contention_join(CATreeBaseOrRouteNode *  baseNodeContainer,
     }else{
         *parentInLinkPtrPtr = parent->right;
     }
-    //Unlink should have happened
-    //Unlock the locks
+    // Unlink should have happened
+    // Unlock the locks
     parent->valid = false;
     LL_unlock(&parent->lock);
     if(parentOfParentRoute != NULL){
         LL_unlock(&parentOfParentRoute->baseOrRoute.route.lock);
     }
-    //Link in new neighbour base
+    // Link in new neighbour base
     if(*parentInLinkPtrPtr == neighbourBaseContainer){
         *parentInLinkPtrPtr = newNeighbourBaseContainer;
     }else if(neighbourBaseParentRoute->baseOrRoute.route.left == neighbourBaseContainer){
@@ -504,8 +506,10 @@ bool low_contention_join(CATreeBaseOrRouteNode *  baseNodeContainer,
 }
 
 
-/*This function assumes that the parent is not the root and that the base node is the left child
- It returns the new locked base node*/
+/*
+ This function assumes that the parent is not the root and that the
+ base node is the left child It returns the new locked base node
+*/
 static inline
 CATreeBaseOrRouteNode *
 low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
@@ -523,8 +527,7 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
     if(neighbourBaseParentRoute == NULL){
         neighbourBaseParentRoute = parentRoute;
     }
-    neighbourBase = &neighbourBaseContainer->baseOrRoute.base;
-    
+    neighbourBase = &neighbourBaseContainer->baseOrRoute.base;    
     catree_lock(&neighbourBase->lock);
     DEBUG_PRINT(("force locked neighbour %p\n", neighbourBaseContainer));
     if(!neighbourBase->valid){
@@ -546,10 +549,10 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
     leftBase = node;
     rightBase = neighbourBase;
     newNeighbourBase->root = skiplist_join(leftBase->root,rightBase->root);
-    //Take out the node
-    //Lock parent
+    // Take out the node
+    // Lock parent
     LL_lock(&parent->lock);
-    //Find parent of parent and lock if posible
+    // Find parent of parent and lock if posible
     CATreeBaseOrRouteNode * parentOfParentRoute = NULL;
     do{
         if(parentOfParentRoute != NULL){
@@ -560,13 +563,13 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
                            parent->key,
                            set);
         if(parentOfParentRoute == NULL){
-            //Parent of parent is root, we are safe becaue it can't be deleted
+            // Parent of parent is root, we are safe because it can't be deleted
             break;
         }
         LL_lock(&parentOfParentRoute->baseOrRoute.route.lock);
     }while(!parentOfParentRoute->baseOrRoute.route.valid);
-    //Parent and parent of parent is safe
-    //We can now unlink the parent route 
+    // Parent and parent of parent is safe
+    // We can now unlink the parent route 
     CATreeBaseOrRouteNode ** parentInLinkPtrPtr = NULL;
     if(parentOfParentRoute == NULL){
         parentInLinkPtrPtr = &set->root;
@@ -576,14 +579,14 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
         parentInLinkPtrPtr = (CATreeBaseOrRouteNode **)&parentOfParentRoute->baseOrRoute.route.right;
     }
     *parentInLinkPtrPtr = parent->right;
-    //Unlock the locks
+    // Unlock the locks
     parent->valid = false;
     LL_unlock(&parent->lock);
     if(parentOfParentRoute != NULL){
         LL_unlock(&parentOfParentRoute->baseOrRoute.route.lock);
     }
-    //Link in new neighbour base which should be locked first:
-    DEBUG_PRINT(("FORCE LOCK NEW NE base %p\n", newNeighbourBaseContainer));
+    // Link in new neighbour base which should be locked first:
+    DEBUG_PRINT(("FORCE LOCK NEW base %p\n", newNeighbourBaseContainer));
     if(*parentInLinkPtrPtr == neighbourBaseContainer){
         *parentInLinkPtrPtr = newNeighbourBaseContainer;
     }else if(neighbourBaseParentRoute->baseOrRoute.route.left == neighbourBaseContainer){
@@ -617,10 +620,10 @@ low_contention_join_force_left_child(CATreeBaseOrRouteNode *  baseNodeContainer,
 
 
 static inline
-void adaptAndUnlock(CAPQ * set,
-                    CATreeBaseOrRouteNode * currentNode,
-                    CATreeBaseOrRouteNode * prevNode,
-                    bool catree_adapt){
+void adapt_and_unlock(CAPQ * set,
+                      CATreeBaseOrRouteNode * currentNode,
+                      CATreeBaseOrRouteNode * prevNode,
+                      bool catree_adapt){
     CATreeBaseNode * node = &currentNode->baseOrRoute.base;
     CATreeLock * lock = &node->lock;
 #ifndef NO_CA_TREE_ADAPTION
@@ -638,7 +641,7 @@ void adaptAndUnlock(CAPQ * set,
     } else if(lock->statistics < SLCATREE_MIN_CONTENTION_STATISTICS){
         low_contention = true;
     }
-    if(catree_adapt && high_contention || low_contention){
+    if(catree_adapt && (high_contention || low_contention)){
         if(currentCATreeRouteNode == NULL){
             parent = (void**)&set->root;
         }else if(currentCATreeRouteNode->left == currentNode){
@@ -654,13 +657,11 @@ void adaptAndUnlock(CAPQ * set,
                 DEBUG_PRINT(("fail split unlock %p\n", currentNode));
                 catree_unlock(lock);
             }
-        }else{
-            if(!low_contention_join(currentNode,
-                                    prevNode,
-                                    set)){
-                DEBUG_PRINT(("fail join unlock %p\n", currentNode));
-                catree_unlock(lock);
-            }
+        }else if(!low_contention_join(currentNode,
+                                      prevNode,
+                                      set)){
+            DEBUG_PRINT(("fail join unlock %p\n", currentNode));
+            catree_unlock(lock);
         }
         return;
     }
@@ -672,7 +673,7 @@ void adaptAndUnlock(CAPQ * set,
 static inline
 void perform_remove_min_with_lock(fpadelete_min_write_back_mem_type * mem){
     while(fpahelp_info.last_locked_node_parent != NULL && skiplist_is_empty(fpahelp_info.last_locked_node->baseOrRoute.base.root)){
-        //Merge!
+        // Merge
         fpahelp_info.last_locked_node =
             low_contention_join_force_left_child(fpahelp_info.last_locked_node,
                                                  fpahelp_info.last_locked_node_parent,
@@ -682,11 +683,10 @@ void perform_remove_min_with_lock(fpadelete_min_write_back_mem_type * mem){
     int relaxation = fpahelp_info.set->relaxation;
     CATreeBaseNode * base_node = &fpahelp_info.last_locked_node->baseOrRoute.base;
     if(fpahelp_info.set->relaxation == 0){
-
         mem->value = skiplist_remove_min(base_node->root, &mem->key);
         atomic_store_explicit(&mem->response, 0, memory_order_release);
     }else{
-        //Write back whole node(s)
+        // Write back whole node(s)
         SkiplistNode * remove_head = skiplist_remove_head_nodes(base_node->root, relaxation);
         if(remove_head == NULL){
             mem->key = (unsigned long)-1;
@@ -707,7 +707,6 @@ void delegate_perform_remove_min_with_lock(unsigned int msgSize, void * msgParam
 
 static inline
 void adjust_remove_min_relaxation(){
-    //Both buffers are empty reset put buffer and check if tresholds for put buffer limits are reached
     if(fpahelp_info.remove_min_contention > REMOVE_MIN_HIGH_CONTENTION_ADATION_LIMIT){
         fpahelp_info.remove_min_contention = 0;
         if(fpahelp_info.set->relaxation < MAX_REMOVE_MIN_RELAXATION_SIZE){
@@ -722,7 +721,8 @@ void adjust_remove_min_relaxation(){
 }
 
 static inline void adjust_put_buffer(){
-    //Both buffers are empty reset put buffer and check if tresholds for put buffer limits are reached
+    // Both buffers are empty
+    // Reset put buffer and check if tresholds for put buffer limits are reached
     if(fpahelp_info.put_contention > PUT_BUFF_HIGH_CONTENTION_ADATION_LIMIT){
         fpahelp_info.put_contention = 0;
 	fpahelp_info.max_buffered_puts = PUT_BUFF_INCREASE_VALUE;
@@ -814,16 +814,16 @@ void slcatree_set_print(void * setParam){
  */
 
 unsigned long capq_remove_min_param(CAPQ * set,
-                                             unsigned long * key_write_back,
-                                             bool remove_min_relax,
-                                             bool put_relax,
-                                             bool catree_adapt){
+                                    unsigned long * key_write_back,
+                                    bool remove_min_relax,
+                                    bool put_relax,
+                                    bool catree_adapt){
     unsigned long val;
-    //try with buffers first
+    // Try with buffers first
     if(remove_min_from_smallest_buffer(key_write_back, &val)){
         return val;
     }
-    //Find leftmost routing node
+    // Find leftmost routing node
     int retry;
     CATreeBaseOrRouteNode * current_node;
     CATreeBaseOrRouteNode * prev_node;
@@ -853,8 +853,8 @@ unsigned long capq_remove_min_param(CAPQ * set,
                 retry = 1;
             }
         }else{
-            //Successfully delegated the operation.
-            //Write it to the queue
+            // Successfully delegated the operation.
+            // Write it to the queue
             *(fpadelete_min_write_back_mem_type **)buff = &fpadelete_min_write_back_mem;
             LL_close_delegate_buffer(&base_node->lock.lock,
                                      buff,
@@ -927,10 +927,10 @@ unsigned long capq_remove_min_param(CAPQ * set,
     if(remove_min_relax){
         adjust_remove_min_relaxation();
     }
-    adaptAndUnlock(set,
-                   fpahelp_info.last_locked_node,
-                   fpahelp_info.last_locked_node_parent,
-                   catree_adapt);
+    adapt_and_unlock(set,
+                     fpahelp_info.last_locked_node,
+                     fpahelp_info.last_locked_node_parent,
+                     catree_adapt);
     critical_exit();
     if(put_relax){
         adjust_put_buffer();
@@ -941,21 +941,21 @@ unsigned long capq_remove_min_param(CAPQ * set,
 unsigned long capq_remove_min(CAPQ * set,
                                        unsigned long * key_write_back){
     return capq_remove_min_param(set,
-                                          key_write_back,
-                                          true,
-                                          true,
-                                          true);
+                                 key_write_back,
+                                 true,
+                                 true,
+                                 true);
 }
 
 void capq_put_param(CAPQ * set,
-                             unsigned long key,
-                             unsigned long value,
-                             bool catree_adapt){
+                    unsigned long key,
+                    unsigned long value,
+                    bool catree_adapt){
     if(push(&fpahelp_info.put_buffer, key, value)){
         return;
     }
     critical_enter();
-    //Find base node
+    // Find base node
     CATreeBaseOrRouteNode * currentNode;
  insert_opt_start:
     currentNode = set->root;
@@ -974,7 +974,7 @@ void capq_put_param(CAPQ * set,
         pathLength++;
     }
 
-    //Lock and handle contention
+    // Lock and handle contention
     CATreeBaseNode * node = &currentNode->baseOrRoute.base;
     CATreeLock * lock = &node->lock;
     DEBUG_PRINT(("put lock %p\n", currentNode));
@@ -983,13 +983,13 @@ void capq_put_param(CAPQ * set,
     if(buff == NULL){
         // Got the lock
         if(!node->valid){
-            //Retry
+            // Retry
             DEBUG_PRINT(("put  invalid unlock %p\n", currentNode));
             catree_unlock(lock);
             goto insert_opt_start;
         }
     }else{
-        //Successfully delegated the operation.
+        // Successfully delegated the operation.
         put_message msg;
         msg.key = key;
         msg.value = value;
@@ -1030,24 +1030,24 @@ void capq_put_param(CAPQ * set,
 	}
       }
     }else{
-      fpahelp_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
+        fpahelp_info.last_locked_node->baseOrRoute.base.lock.statistics += SLCATREE_LOCK_SUCCESS_STATS_CONTRIB;
     }
     fpahelp_info.flush_stack_pos = 0;    
-    adaptAndUnlock(set,
-                   fpahelp_info.last_locked_node,
-                   fpahelp_info.last_locked_node_parent,
-                   catree_adapt);
+    adapt_and_unlock(set,
+                     fpahelp_info.last_locked_node,
+                     fpahelp_info.last_locked_node_parent,
+                     catree_adapt);
     critical_exit();
     return;
 }
 
 void capq_put(CAPQ * set,
-                       unsigned long key,
-                       unsigned long value){
+              unsigned long key,
+              unsigned long value){
     capq_put_param(set,
-                            key,
-                            value,
-                            true);
+                   key,
+                   value,
+                   true);
 }
 
 void capq_delete(CAPQ * setParam){
