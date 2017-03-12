@@ -26,7 +26,10 @@ public:
     void signal_no_waste();
 
     void init_thread(const size_t nthreads);
-    constexpr static bool supports_concurrency() { return true; }
+    constexpr static bool supports_concurrency()
+    {
+        return true;
+    }
 
 private:
     capq_t *m_q;

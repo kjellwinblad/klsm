@@ -7,11 +7,11 @@ extern "C" {
 }
 
 
-    
+
 struct capq_t {
-    char pad1[64 - sizeof(CAPQ *)]; 
+    char pad1[64 - sizeof(CAPQ *)];
     CAPQ *pq;
-    char pad2[64]; 
+    char pad2[64];
 };
 
 static inline void
@@ -49,7 +49,7 @@ CPPCAPQ<remove_min_relax, put_relax, catree_adapt>::init_thread(const size_t nth
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
 CPPCAPQ<remove_min_relax, put_relax, catree_adapt>::insert(const uint32_t &key,
-                                                               const uint32_t &value)
+        const uint32_t &value)
 {
     qdcatree_insert(m_q->pq, key, value);
 }
@@ -57,7 +57,7 @@ CPPCAPQ<remove_min_relax, put_relax, catree_adapt>::insert(const uint32_t &key,
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
 void
 CPPCAPQ<remove_min_relax, put_relax, catree_adapt>::insert(const size_t &key,
-                                                               const size_t &value)
+        const size_t &value)
 {
     capq_put_param(m_q->pq,
                    (unsigned long) key,
@@ -77,7 +77,7 @@ CPPCAPQ<remove_min_relax, put_relax, catree_adapt>::delete_min(uint32_t &v)
 {
     unsigned long key_write_back;
     v = (uint32_t)capq_remove_min(m_q->pq, &key_write_back);
-    return key_write_back != ((unsigned long)-1);
+    return key_write_back != ((unsigned long) - 1);
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>
@@ -85,9 +85,10 @@ bool
 CPPCAPQ<remove_min_relax, put_relax, catree_adapt>::delete_min(size_t &k, size_t &v)
 {
     unsigned long key_write_back;
-    v = (size_t)capq_remove_min_param(m_q->pq, &key_write_back, remove_min_relax, put_relax, catree_adapt);
+    v = (size_t)capq_remove_min_param(m_q->pq, &key_write_back, remove_min_relax, put_relax,
+                                      catree_adapt);
     k = (size_t)key_write_back;
-    return key_write_back != ((unsigned long)-1);
+    return key_write_back != ((unsigned long) - 1);
 }
 
 template <bool remove_min_relax, bool put_relax, bool catree_adapt>

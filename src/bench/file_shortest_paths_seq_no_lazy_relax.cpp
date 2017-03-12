@@ -1,6 +1,5 @@
 /*
- *  Copyright 2016 Kjell Winblad
- *  Copyright 2014 Jakob Gruber
+ *  Copyright 2017 Kjell Winblad and Jakob Gruber
  *
  *  This file is part of kpqueue.
  *
@@ -18,19 +17,19 @@
  *  along with kpqueue.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cassert>
+#include <cstdlib>
 #include <ctime>
+#include <fstream>
 #include <future>
 #include <getopt.h>
+#include <iostream>
 #include <random>
 #include <thread>
 #include <unistd.h>
-#include <iostream>
-#include <fstream>
-#include <cstdlib>
-#include <cassert>
+
 #include "fiboheap.h"
 #include "util.h"
-
 
 constexpr int DEFAULT_NTHREADS   = 1;
 constexpr int DEFAULT_SEED       = 0;
@@ -63,7 +62,7 @@ static threads_waiting_to_succeed_pad wt;
 struct settings {
     int num_threads;
     std::string graph_file;
-    int seed;    
+    int seed;
     size_t max_generated_random_weight;
     std::string output_file;
     std::string type;
@@ -77,8 +76,7 @@ struct edge_t {
 struct vertex_t {
     size_t num_edges;
     size_t distance;
-    FibHeap<size_t,size_t>::FibNode * n;
-  //bool processed;
+    FibHeap<size_t, size_t>::FibNode *n;
     edge_t *edges;
 };
 
@@ -106,45 +104,48 @@ static vertex_t *
 read_graph(std::string file_path,
            bool generate_weights,
            size_t generate_weights_range_end,
-           size_t & number_of_nodes_write_back,
+           size_t &number_of_nodes_write_back,
            int seed)
 {
     std::ifstream file;
     file.open(file_path);
-    if ( ! file.is_open()) {
+    if (! file.is_open()) {
         std::cerr << "Could not open file: " << file_path << std::endl;
         std::exit(0);
     }
     size_t tmp_num1;
     size_t tmp_num2;
     std::string tmp_str;
-    file >> tmp_str >> tmp_str >> tmp_num1 >> tmp_str >>  tmp_num2;    
+    file >> tmp_str >> tmp_str >> tmp_num1 >> tmp_str >>  tmp_num2;
     number_of_nodes_write_back = tmp_num1;
     size_t n = tmp_num1;
     vertex_t *data = new vertex_t[n];
     size_t *current_edge_index = new size_t[n];
-    for(size_t i = 0; i < n; i++){
+    for (size_t i = 0; i < n; i++) {
         data[i].num_edges = 0;
         data[i].distance = std::numeric_limits<size_t>::max();
         data[i].n = NULL;
         //data[i].processed = false;
         data[i].edges = NULL;
     }
-    for(size_t i = 0; i < n; i++){
+    for (size_t i = 0; i < n; i++) {
         current_edge_index[i] = 0;
     }
-    while (!file.eof())
-    {
+    while (!file.eof()) {
         file >> tmp_num1 >> tmp_num2;
 #ifdef IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE
-        if (tmp_num1 >= n) continue;
-        if (tmp_num2 >= n) continue;
+        if (tmp_num1 >= n) {
+            continue;
+        }
+        if (tmp_num2 >= n) {
+            continue;
+        }
 #endif
         data[tmp_num1].num_edges++;
     }
     file.close();
     file.open(file_path);
-    if ( ! file.is_open()) {
+    if (! file.is_open()) {
         std::cerr << "Could not open file: " << file_path << std::endl;
         std::exit(0);
     }
@@ -152,20 +153,23 @@ read_graph(std::string file_path,
     std::mt19937 rng;
     rng.seed(seed);
     std::uniform_int_distribution<size_t> rnd_st(0, generate_weights_range_end);
-    while (!file.eof())
-    {
+    while (!file.eof()) {
         file >> tmp_num1 >> tmp_num2;
 #ifdef IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE
-        if (tmp_num1 >= n) continue;
-        if (tmp_num2 >= n) continue;
+        if (tmp_num1 >= n) {
+            continue;
+        }
+        if (tmp_num2 >= n) {
+            continue;
+        }
 #endif
-        if(data[tmp_num1].edges == NULL){
+        if (data[tmp_num1].edges == NULL) {
             data[tmp_num1].edges = new edge_t[data[tmp_num1].num_edges];
         }
         data[tmp_num1].edges[current_edge_index[tmp_num1]].target = tmp_num2;
-        if(!generate_weights){
+        if (!generate_weights) {
             data[tmp_num1].edges[current_edge_index[tmp_num1]].weight = 1;
-        }else{
+        } else {
             data[tmp_num1].edges[current_edge_index[tmp_num1]].weight = rnd_st(rng);;
         }
         current_edge_index[tmp_num1]++;
@@ -180,16 +184,16 @@ print_graph(const vertex_t *graph,
             std::string out_file)
 {
     std::ofstream file(out_file);
-    if (!file.is_open()){
+    if (!file.is_open()) {
         std::cerr << "Unable to open out file: " << out_file << std::endl;
         std::exit(0);
     }
     for (size_t i = 0; i < n; i++) {
         const vertex_t *v = &graph[i];
         const size_t v_dist = v->distance;
-        if(v_dist == std::numeric_limits<size_t>::max()){
+        if (v_dist == std::numeric_limits<size_t>::max()) {
             file << i << " -1\n";
-        }else{
+        } else {
             file << i << " " << v_dist << "\n";
         }
     }
@@ -208,16 +212,16 @@ delete_graph(vertex_t *data,
     delete[] data;
 }
 
-static void start_sssp(FibHeap<size_t,size_t> *pq,
+static void start_sssp(FibHeap<size_t, size_t> *pq,
                        vertex_t *graph)
 {
 
 #ifdef PAPI
-    if (PAPI_OK != PAPI_start_counters(g_events, G_EVENT_COUNT)){
-            std::cout << ("Problem starting counters 1.\n");
+    if (PAPI_OK != PAPI_start_counters(g_events, G_EVENT_COUNT)) {
+        std::cout << ("Problem starting counters 1.\n");
     }
 #endif
-    
+
 
     while (!pq->empty()) {
         size_t distance;
@@ -233,23 +237,23 @@ static void start_sssp(FibHeap<size_t,size_t> *pq,
 
             if (new_dist < w_dist) {
                 w->distance = new_dist;
-                if(w->n == NULL){
+                if (w->n == NULL) {
                     w->n = pq->push(new_dist, e->target);
-                }else{
+                } else {
                     pq->decrease_key(w->n, new_dist);
                 }
             }
         }
     }
 #ifdef PAPI
-    if (PAPI_OK != PAPI_read_counters(g_values[0], G_EVENT_COUNT)){
+    if (PAPI_OK != PAPI_read_counters(g_values[0], G_EVENT_COUNT)) {
         std::cout << ("Problem reading counters 2.\n");
     }
 #endif
 }
 
 static int
-bench(FibHeap<size_t,size_t> *pq,
+bench(FibHeap<size_t, size_t> *pq,
       const struct settings &settings)
 {
 
@@ -273,7 +277,7 @@ bench(FibHeap<size_t,size_t> *pq,
     clock_gettime(CLOCK_MONOTONIC, &start);
 
     start_sssp(pq, graph);
-    
+
     clock_gettime(CLOCK_MONOTONIC, &end);
     /* End benchmark. */
 
@@ -281,7 +285,7 @@ bench(FibHeap<size_t,size_t> *pq,
     print_graph(graph,
                 number_of_nodes,
                 settings.output_file);
-    
+
     const double elapsed = timediff_in_s(start, end);
     fprintf(stdout, "%f", elapsed);
 
@@ -356,37 +360,37 @@ main(int argc,
 
 
 #ifdef PAPI
-  if (PAPI_VER_CURRENT != PAPI_library_init(PAPI_VER_CURRENT)){
-    std::cout << ("PAPI_library_init error.\n");
-    return 0; 
-  }
+    if (PAPI_VER_CURRENT != PAPI_library_init(PAPI_VER_CURRENT)) {
+        std::cout << ("PAPI_library_init error.\n");
+        return 0;
+    }
 
-  if (PAPI_OK != PAPI_query_event(PAPI_L1_DCM)){
-    std::cout << ("Cannot count PAPI_L1_DCM.\n");
-  }
-  if (PAPI_OK != PAPI_query_event(PAPI_L2_DCM)){
-    std::cout << ("Cannot count PAPI_L2_DCM.");
-  }
+    if (PAPI_OK != PAPI_query_event(PAPI_L1_DCM)) {
+        std::cout << ("Cannot count PAPI_L1_DCM.\n");
+    }
+    if (PAPI_OK != PAPI_query_event(PAPI_L2_DCM)) {
+        std::cout << ("Cannot count PAPI_L2_DCM.");
+    }
 #endif
 
-    
+
     if (s.type == "fibheap") {
         FibHeap<size_t, size_t> pq;
         ret = bench(&pq, s);
-    }else {
+    } else {
         usage();
         return ret;
     }
 #ifdef PAPI
-  long total_L2_cache_accesses = 0;
-  long total_L2_cache_misses = 0;
-  int k = 0;
-  for (k = 0; k <  s.num_threads; k++) {
-    total_L2_cache_accesses += g_values[k][0];
-    total_L2_cache_misses += g_values[k][1];
-  }
-  printf(" %ld %ld", total_L2_cache_accesses, total_L2_cache_misses);
+    long total_L2_cache_accesses = 0;
+    long total_L2_cache_misses = 0;
+    int k = 0;
+    for (k = 0; k <  s.num_threads; k++) {
+        total_L2_cache_accesses += g_values[k][0];
+        total_L2_cache_misses += g_values[k][1];
+    }
+    printf(" %ld %ld", total_L2_cache_accesses, total_L2_cache_misses);
 #endif
-  printf("\n");
-  return ret;
+    printf("\n");
+    return ret;
 }

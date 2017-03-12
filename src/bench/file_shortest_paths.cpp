@@ -1,6 +1,5 @@
 /*
- *  Copyright 2016 Kjell Winblad
- *  Copyright 2014 Jakob Gruber
+ *  Copyright 2017 Kjell Winblad and Jakob Gruber
  *
  *  This file is part of kpqueue.
  *
@@ -19,19 +18,19 @@
  */
 
 #include <ctime>
+#include <cstdlib>
 #include <future>
+#include <fstream>
 #include <getopt.h>
+#include <iostream>
 #include <random>
 #include <thread>
 #include <unistd.h>
-#include <iostream>
-#include <fstream>
-#include <cstdlib>
 
+#include "pqs/cppcapq.h"
 #include "pqs/globallock.h"
 #include "pqs/multiq.h"
 #include "pqs/linden.h"
-#include "pqs/cppcapq.h"
 #include "pqs/spraylist.h"
 #include "dist_lsm/dist_lsm.h"
 #include "k_lsm/k_lsm.h"
@@ -103,12 +102,12 @@ struct threads_waiting_to_succeed_pad {
 
 static threads_waiting_to_succeed_pad wt;
 
-static std::atomic<long> * threads_wait_switches;
+static std::atomic<long> *threads_wait_switches;
 
 struct settings {
     int num_threads;
     std::string graph_file;
-    int seed;    
+    int seed;
     size_t max_generated_random_weight;
     std::string output_file;
     std::string type;
@@ -148,43 +147,46 @@ static vertex_t *
 read_graph(std::string file_path,
            bool generate_weights,
            size_t generate_weights_range_end,
-           size_t & number_of_nodes_write_back,
+           size_t &number_of_nodes_write_back,
            int seed)
 {
     std::ifstream file;
     file.open(file_path);
-    if ( ! file.is_open()) {
+    if (! file.is_open()) {
         std::cerr << "Could not open file: " << file_path << std::endl;
         std::exit(0);
     }
     size_t tmp_num1;
     size_t tmp_num2;
     std::string tmp_str;
-    file >> tmp_str >> tmp_str >> tmp_num1 >> tmp_str >>  tmp_num2;    
+    file >> tmp_str >> tmp_str >> tmp_num1 >> tmp_str >>  tmp_num2;
     number_of_nodes_write_back = tmp_num1;
     size_t n = tmp_num1;
     vertex_t *data = new vertex_t[n];
     size_t *current_edge_index = new size_t[n];
-    for(size_t i = 0; i < n; i++){
+    for (size_t i = 0; i < n; i++) {
         data[i].num_edges = 0;
-        data[i].distance.store(std::numeric_limits<size_t>::max(), std::memory_order_relaxed );
+        data[i].distance.store(std::numeric_limits<size_t>::max(), std::memory_order_relaxed);
         data[i].edges = NULL;
     }
-    for(size_t i = 0; i < n; i++){
+    for (size_t i = 0; i < n; i++) {
         current_edge_index[i] = 0;
     }
-    while (!file.eof())
-    {
+    while (!file.eof()) {
         file >> tmp_num1 >> tmp_num2;
 #ifdef IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE
-        if (tmp_num1 >= n) continue;
-        if (tmp_num2 >= n) continue;
+        if (tmp_num1 >= n) {
+            continue;
+        }
+        if (tmp_num2 >= n) {
+            continue;
+        }
 #endif
         data[tmp_num1].num_edges++;
     }
     file.close();
     file.open(file_path);
-    if ( ! file.is_open()) {
+    if (! file.is_open()) {
         std::cerr << "Could not open file: " << file_path << std::endl;
         std::exit(0);
     }
@@ -192,20 +194,23 @@ read_graph(std::string file_path,
     std::mt19937 rng;
     rng.seed(seed);
     std::uniform_int_distribution<size_t> rnd_st(0, generate_weights_range_end);
-    while (!file.eof())
-    {
+    while (!file.eof()) {
         file >> tmp_num1 >> tmp_num2;
 #ifdef IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE
-        if (tmp_num1 >= n) continue;
-        if (tmp_num2 >= n) continue;
+        if (tmp_num1 >= n) {
+            continue;
+        }
+        if (tmp_num2 >= n) {
+            continue;
+        }
 #endif
-        if(data[tmp_num1].edges == NULL){
+        if (data[tmp_num1].edges == NULL) {
             data[tmp_num1].edges = new edge_t[data[tmp_num1].num_edges];
         }
         data[tmp_num1].edges[current_edge_index[tmp_num1]].target = tmp_num2;
-        if(!generate_weights){
+        if (!generate_weights) {
             data[tmp_num1].edges[current_edge_index[tmp_num1]].weight = 1;
-        }else{
+        } else {
             data[tmp_num1].edges[current_edge_index[tmp_num1]].weight = rnd_st(rng);;
         }
         current_edge_index[tmp_num1]++;
@@ -220,16 +225,16 @@ print_graph(const vertex_t *graph,
             std::string out_file)
 {
     std::ofstream file(out_file);
-    if (!file.is_open()){
+    if (!file.is_open()) {
         std::cerr << "Unable to open out file: " << out_file << std::endl;
         std::exit(0);
     }
     for (size_t i = 0; i < n; i++) {
         const vertex_t *v = &graph[i];
         const size_t v_dist = v->distance.load(std::memory_order_relaxed);
-        if(v_dist == std::numeric_limits<size_t>::max()){
+        if (v_dist == std::numeric_limits<size_t>::max()) {
             file << i << " -1\n";
-        }else{
+        } else {
             file << i << " " << v_dist << "\n";
         }
     }
@@ -258,13 +263,13 @@ bench_thread(T *pq,
 {
     unsigned long nodes_processed = 0;
 #ifdef MANUAL_PINNING
-    int cpu = 4*(thread_id%16) + thread_id/16;
+    int cpu = 4 * (thread_id % 16) + thread_id / 16;
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(cpu, &cpuset);
-    
-    if( pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset) != 0 ){
-        printf( "error setting affinity to %d\n", (int)cpu );
+
+    if (pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset) != 0) {
+        printf("error setting affinity to %d\n", (int)cpu);
     }
 #else
     hwloc.pin_to_core(thread_id);
@@ -272,11 +277,11 @@ bench_thread(T *pq,
 
 #ifdef PAPI
     int papi = PAPI_start_counters(g_events, G_EVENT_COUNT);
-    if (PAPI_OK != papi){
-      std::cout << "Problem starting counters " << papi << ".\n";
+    if (PAPI_OK != papi) {
+        std::cout << "Problem starting counters " << papi << ".\n";
     }
 #endif
-    
+
     pq->init_thread(number_of_threads);
     while (!start_barrier.load(std::memory_order_relaxed)) {
         /* Wait. */
@@ -286,14 +291,14 @@ bench_thread(T *pq,
         size_t node;
         if (!pq->delete_min(distance, node)) {
             bool success = false;
-            for(int i = 0 ; i < 400; i++){
-                if (pq->delete_min(distance, node)){
+            for (int i = 0 ; i < 400; i++) {
+                if (pq->delete_min(distance, node)) {
                     success = true;
                     break;
                 }
                 std::this_thread::yield();
             }
-            if(!success){
+            if (!success) {
                 /*
                   Quite complex protocol to make sure threads don't
                   quit when there are still nodes to process. It works
@@ -312,7 +317,7 @@ bench_thread(T *pq,
 
                   A waiting thread waits until one of the following
                   conditions are met:
-                  
+
                   1. wt.threads_waiting_to_succeed is equal to the
                   number of working threads times two. This means that
                   after some time point after which no insert
@@ -343,32 +348,32 @@ bench_thread(T *pq,
                 //Tell other threads that we found nothing in the priority queue
                 threads_wait_switches[ ARRAY_PADDING + thread_id ].store(1);
                 wt.threads_waiting_to_succeed.fetch_add(1);
-                if( ! pq->delete_min(distance, node) ) {
+                if (! pq->delete_min(distance, node)) {
                     int curr_value2 = wt.threads_waiting_to_succeed.fetch_add(1) + 1;
                     threads_wait_switches[ ARRAY_PADDING + thread_id ].store(2);
-                    while(true){
-                        if(curr_value2 == (2*number_of_threads)){
+                    while (true) {
+                        if (curr_value2 == (2 * number_of_threads)) {
                             // All threads have observed that
                             // delete_min failed after some timepoint
                             // after which no insert operation has
                             // been performed. We are done!
                             break;
                         }
-                        if(threads_wait_switches[ ARRAY_PADDING + thread_id ].load( std::memory_order_acquire) == 0 ){
+                        if (threads_wait_switches[ ARRAY_PADDING + thread_id ].load(std::memory_order_acquire) == 0) {
                             // A thread notified the current thread that something got inserted in the queue
                             // Continue trying to delete_min
                             success = true;
                             break;
                         }
                         std::this_thread::yield();
-                        curr_value2 = wt.threads_waiting_to_succeed.load( std::memory_order_acquire );
+                        curr_value2 = wt.threads_waiting_to_succeed.load(std::memory_order_acquire);
                     }
-                    if(!success){
+                    if (!success) {
                         break;
-                    }else{
+                    } else {
                         continue;
                     }
-                }else{
+                } else {
                     wt.threads_waiting_to_succeed.fetch_sub(1);
                     threads_wait_switches[ ARRAY_PADDING + thread_id ].store(0);
                 }
@@ -399,19 +404,19 @@ bench_thread(T *pq,
 
             if (dist_updated) {
                 pq->insert(new_dist, e->target);
-                if(wt.threads_waiting_to_succeed.load( std::memory_order_acquire ) > 0){
+                if (wt.threads_waiting_to_succeed.load(std::memory_order_acquire) > 0) {
                     // Notify threads that there is still work to do
-                    for(int i = ARRAY_PADDING; i < number_of_threads; i++){
-                        while(true){
-                            long currentValue = threads_wait_switches[i].load( std::memory_order_acquire );
-                            if(currentValue == 2) {
+                    for (int i = ARRAY_PADDING; i < number_of_threads; i++) {
+                        while (true) {
+                            long currentValue = threads_wait_switches[i].load(std::memory_order_acquire);
+                            if (currentValue == 2) {
                                 // If the thread's slot has the value 2, it need to be notified
                                 long expected = 2;
-                                if(threads_wait_switches[i].compare_exchange_strong( expected, 3 )){
+                                if (threads_wait_switches[i].compare_exchange_strong(expected, 3)) {
                                     // If we succefully changed the thread's slot to 3,
                                     // we will decrement wt.threads_waiting_to_succeed and notify the thread
                                     wt.threads_waiting_to_succeed.fetch_sub(2);
-                                    threads_wait_switches[i].store(0 , std::memory_order_release);
+                                    threads_wait_switches[i].store(0, std::memory_order_release);
                                 }
                             } else if (currentValue == 0 || currentValue == 3) {
                                 // If the thread's slot has the value 0, it does not need to be notified
@@ -428,8 +433,8 @@ bench_thread(T *pq,
     *nodes_processed_writeback = nodes_processed;
 #ifdef PAPI
     int papi2 = PAPI_read_counters(g_values[thread_id], G_EVENT_COUNT);
-    if (PAPI_OK != papi2){
-      std::cout << "Problem reading counters " << papi2 << ".\n";
+    if (PAPI_OK != papi2) {
+        std::cout << "Problem reading counters " << papi2 << ".\n";
     }
 #endif
 }
@@ -462,7 +467,7 @@ bench(T *pq,
     /* Start all threads. */
 
     std::vector<std::thread> threads(settings.num_threads);
-    size_t * number_of_nodes_processed_for_thread =
+    size_t *number_of_nodes_processed_for_thread =
         new size_t [settings.num_threads];
     wt.threads_waiting_to_succeed = 0;
     for (int i = 0; i < settings.num_threads; i++) {
@@ -492,14 +497,14 @@ bench(T *pq,
             number_of_nodes_processed_for_thread[i];
     }
     delete[] number_of_nodes_processed_for_thread;
-    
+
     clock_gettime(CLOCK_MONOTONIC, &end);
     /* End benchmark. */
 
     print_graph(graph,
                 number_of_nodes,
                 settings.output_file);
-    
+
     const double elapsed = timediff_in_s(start, end);
     fprintf(stdout, "%f %lu", elapsed, total_number_of_nodes_processed);
 
@@ -575,71 +580,71 @@ main(int argc,
     number_of_threads =  s.num_threads;
 
     // Padding + space for each thread
-    threads_wait_switches = new std::atomic<long>[ARRAY_PADDING*2 + number_of_threads];
-    for(int i = ARRAY_PADDING; i < number_of_threads; i++){
+    threads_wait_switches = new std::atomic<long>[ARRAY_PADDING * 2 + number_of_threads];
+    for (int i = ARRAY_PADDING; i < number_of_threads; i++) {
         threads_wait_switches[i].store(0);
     }
-    
-#ifdef PAPI
-  if (PAPI_VER_CURRENT != PAPI_library_init(PAPI_VER_CURRENT)){
-    std::cout << ("PAPI_library_init error.\n");
-    return 0; 
-  }
 
-  if (PAPI_OK != PAPI_query_event(PAPI_L2_DCA)){
-    std::cout << ("Cannot count PAPI_L2_DCA.\n");
-  }
-  if (PAPI_OK != PAPI_query_event(PAPI_L2_DCM)){
-    std::cout << ("Cannot count PAPI_L2_DCM.");
-  }
+#ifdef PAPI
+    if (PAPI_VER_CURRENT != PAPI_library_init(PAPI_VER_CURRENT)) {
+        std::cout << ("PAPI_library_init error.\n");
+        return 0;
+    }
+
+    if (PAPI_OK != PAPI_query_event(PAPI_L2_DCA)) {
+        std::cout << ("Cannot count PAPI_L2_DCA.\n");
+    }
+    if (PAPI_OK != PAPI_query_event(PAPI_L2_DCM)) {
+        std::cout << ("Cannot count PAPI_L2_DCM.");
+    }
 #endif
 
-    
+
     if (s.type == PQ_DLSM) {
         kpq::dist_lsm<size_t, size_t, DEFAULT_RELAXATION> pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM) {
-         kpq::k_lsm<size_t, size_t, DEFAULT_RELAXATION> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, DEFAULT_RELAXATION> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM16) {
-         kpq::k_lsm<size_t, size_t, 16> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 16> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM128) {
-         kpq::k_lsm<size_t, size_t, 128> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 128> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM256) {
-         kpq::k_lsm<size_t, size_t, 256> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 256> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM512) {
-         kpq::k_lsm<size_t, size_t, 512> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 512> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM1024) {
-         kpq::k_lsm<size_t, size_t, 1024> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 1024> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM2048) {
-         kpq::k_lsm<size_t, size_t, 2048> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 2048> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM4096) {
-         kpq::k_lsm<size_t, size_t, 4096> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 4096> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM8192) {
-         kpq::k_lsm<size_t, size_t, 8192> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 8192> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM16384) {
-         kpq::k_lsm<size_t, size_t, 16384> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 16384> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM32768) {
-         kpq::k_lsm<size_t, size_t, 32768> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 32768> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM65536) {
-         kpq::k_lsm<size_t, size_t, 65536> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 65536> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_KLSM131072) {
-         kpq::k_lsm<size_t, size_t, 131072> pq;
-         ret = bench(&pq, s);
+        kpq::k_lsm<size_t, size_t, 131072> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_GLOBALLOCK) {
-         kpqbench::GlobalLock<size_t, size_t> pq;
-         ret = bench(&pq, s);
+        kpqbench::GlobalLock<size_t, size_t> pq;
+        ret = bench(&pq, s);
     } else if (s.type == PQ_MULTIQC2) {
         kpqbench::multiq<size_t, size_t, 2> pq(s.num_threads);
         ret = bench(&pq, s);
@@ -671,32 +676,31 @@ main(int argc,
         kpqbench::Linden pq(kpqbench::Linden::DEFAULT_OFFSET);
         ret = bench(&pq, s);
     }  else if (s.type == PQ_CAPQ) {
-        kpqbench::CPPCAPQ<true,true,true> pq;
+        kpqbench::CPPCAPQ<true, true, true> pq;
         ret = bench(&pq, s);
     }  else if (s.type == PQ_CADM) {
-        kpqbench::CPPCAPQ<true,false,true> pq;
+        kpqbench::CPPCAPQ<true, false, true> pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_CAIN) {
-        kpqbench::CPPCAPQ<false,true,true> pq;
+        kpqbench::CPPCAPQ<false, true, true> pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_CATREE) {
-        kpqbench::CPPCAPQ<false,false,true> pq;
+        kpqbench::CPPCAPQ<false, false, true> pq;
         ret = bench(&pq, s);
-    }
-    else {
+    } else {
         usage();
         return ret;
     }
 #ifdef PAPI
-  long total_L2_cache_accesses = 0;
-  long total_L2_cache_misses = 0;
-  int k = 0;
-  for (k = 0; k <  s.num_threads; k++) {
-    total_L2_cache_accesses += g_values[k][0];
-    total_L2_cache_misses += g_values[k][1];
-  }
-  printf(" %ld %ld", total_L2_cache_accesses, total_L2_cache_misses);
+    long total_L2_cache_accesses = 0;
+    long total_L2_cache_misses = 0;
+    int k = 0;
+    for (k = 0; k <  s.num_threads; k++) {
+        total_L2_cache_accesses += g_values[k][0];
+        total_L2_cache_misses += g_values[k][1];
+    }
+    printf(" %ld %ld", total_L2_cache_accesses, total_L2_cache_misses);
 #endif
-  printf("\n");
-  return ret;
+    printf("\n");
+    return ret;
 }

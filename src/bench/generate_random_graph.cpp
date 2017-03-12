@@ -1,5 +1,5 @@
 /*
- *  Copyright 2014 Jakob Gruber and Kjell Winblad
+ *  Copyright 2017 Jakob Gruber and Kjell Winblad
  *
  *  This file is part of kpqueue.
  *
@@ -43,7 +43,7 @@ static vertex_t *
 generate_graph(const size_t n,
                const int seed,
                const double p,
-               size_t & num_edges_writeback)
+               size_t &num_edges_writeback)
 {
     vertex_t *data = new vertex_t[n];
 
@@ -118,14 +118,14 @@ main(int argc,
         //usage();
     }
 
-    vertex_t * nodes = generate_graph(number_of_nodes,
-                                      0,
-                                      edge_probability,
-                                      num_edges);
-    std::cout << "# Nodes: " <<number_of_nodes <<" Edges: " <<num_edges<<std::endl;
+    vertex_t *nodes = generate_graph(number_of_nodes,
+                                     0,
+                                     edge_probability,
+                                     num_edges);
+    std::cout << "# Nodes: " << number_of_nodes << " Edges: " << num_edges << std::endl;
     //Print the generated graph to stdout
-    for(size_t i; i < number_of_nodes ; i++){
-        for(size_t k = 0; k < nodes[i].num_edges; k++){
+    for (size_t i; i < number_of_nodes ; i++) {
+        for (size_t k = 0; k < nodes[i].num_edges; k++) {
             std::cout << i << "\t" << nodes[i].edges[k].target << std::endl;
         }
     }

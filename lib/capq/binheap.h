@@ -1,6 +1,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
- 
+
 typedef struct {
     unsigned long key;
     unsigned long value;
@@ -13,8 +13,9 @@ typedef struct {
     int size;
     node_t nodes[MAX_HEAP_SIZE];
 } heap_t;
- 
-bool push (heap_t *h, unsigned long key, unsigned long value) {
+
+bool push(heap_t *h, unsigned long key, unsigned long value)
+{
     if (h->len + 1 >= h->size) {
         return false;
     }
@@ -31,7 +32,8 @@ bool push (heap_t *h, unsigned long key, unsigned long value) {
     return true;
 }
 
-bool peek (heap_t *h, unsigned long *key) {
+bool peek(heap_t *h, unsigned long *key)
+{
     if (h->len == 0) {
         return false;
     }
@@ -40,7 +42,8 @@ bool peek (heap_t *h, unsigned long *key) {
 }
 
 
-bool pop (heap_t *h, unsigned long *key, unsigned long *value) {
+bool pop(heap_t *h, unsigned long *key, unsigned long *value)
+{
     int i, j, k;
     if (!h->len) {
         return false;
@@ -69,5 +72,5 @@ bool pop (heap_t *h, unsigned long *key, unsigned long *value) {
     h->nodes[i] = h->nodes[h->len + 1];
     return true;
 }
- 
+
 
