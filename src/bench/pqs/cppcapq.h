@@ -7,14 +7,14 @@
 namespace kpqbench
 {
 
-struct fpaqdcatree_t;
+struct capq_t;
 
 template <bool remove_min_relax = true, bool put_relax = true, bool catree_adapt = true>
-class CAPQ
+class CPPCAPQ
 {
 public:
-    CAPQ();
-    virtual ~CAPQ();
+    CPPCAPQ();
+    virtual ~CPPCAPQ();
 
     void insert(const uint32_t &key, const uint32_t &value);
     void insert(const size_t &key, const size_t &value);
@@ -29,10 +29,10 @@ public:
     constexpr static bool supports_concurrency() { return true; }
 
 private:
-    fpaqdcatree_t *m_q;
+    capq_t *m_q;
 };
 
-#include "capq_inl.h"
+#include "cppcapq_inl.h"
 }
 
 #endif /* __CPPCAPQ_H */

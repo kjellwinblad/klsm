@@ -7,10 +7,16 @@
 #include <time.h>
 #include <sched.h>
 
+#if defined(__x86_64__) || defined(_M_X64)
+#define CPUPAUSE asm("pause");
+#else
+#define CPUPAUSE 
+#endif
+
 static inline void thread_yield(){
     //sched_yield();
     //atomic_thread_fence(memory_order_seq_cst);
-    asm("pause");
+    CPUPAUSE;
 }
 
 #ifndef __clang__

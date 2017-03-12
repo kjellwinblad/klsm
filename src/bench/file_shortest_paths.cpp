@@ -671,16 +671,16 @@ main(int argc,
         kpqbench::Linden pq(kpqbench::Linden::DEFAULT_OFFSET);
         ret = bench(&pq, s);
     }  else if (s.type == PQ_CAPQ) {
-        kpqbench::CAPQ<true,true,true> pq;
+        kpqbench::CPPCAPQ<true,true,true> pq;
         ret = bench(&pq, s);
     }  else if (s.type == PQ_CADM) {
-        kpqbench::CAPQ<true,false,true> pq;
+        kpqbench::CPPCAPQ<true,false,true> pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_CAIN) {
-        kpqbench::CAPQ<false,true,true> pq;
+        kpqbench::CPPCAPQ<false,true,true> pq;
         ret = bench(&pq, s);
     } else if (s.type == PQ_CATREE) {
-        kpqbench::CAPQ<false,false,true> pq;
+        kpqbench::CPPCAPQ<false,false,true> pq;
         ret = bench(&pq, s);
     }
     else {
