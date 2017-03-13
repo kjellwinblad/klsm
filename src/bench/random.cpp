@@ -200,15 +200,17 @@ usage()
             "       pq: The data structure to use as the backing priority queue\n"
             "           (one of '%s', '%s', '%s', '%s', '%s', '%s',\n"
             "                   '%s', '%s', '%s', '%s', '%s', '%s',\n"
-            "                   '%s', '%s', '%s', '%s')\n",
+            "                   '%s', '%s', '%s', '%s', '%s', '%s',\n"
+            "                   '%s', '%s')\n",
             DEFAULT_COUNTERS,
             DEFAULT_SIZE,
             KEYS_UNIFORM, KEYS_ASCENDING, KEYS_DESCENDING, KEYS_RESTRICTED_8, KEYS_RESTRICTED_16, DEFAULT_KEYS,
             DEFAULT_NTHREADS,
             DEFAULT_SEED,
             WORKLOAD_UNIFORM, WORKLOAD_SPLIT, WORKLOAD_PRODUCER, WORKLOAD_ALTERNATING, DEFAULT_WORKLOAD,
-            PQ_CHEAP, PQ_DLSM, PQ_GLOBALLOCK, PQ_KLSM16, PQ_KLSM128, PQ_KLSM256, PQ_KLSM4096,
-            PQ_LINDEN, PQ_LSM, PQ_MLSM, PQ_MULTIQ, PQ_SEQUENCE, PQ_SKIP, PQ_SLSM, PQ_SPRAY, "nada");
+            PQ_CAPQ, PQ_CADM, PQ_CAIN, PQ_CATREE, PQ_CHEAP, PQ_DLSM, PQ_GLOBALLOCK, PQ_KLSM16,
+            PQ_KLSM128, PQ_KLSM256, PQ_KLSM4096, PQ_LINDEN, PQ_LSM, PQ_MLSM, PQ_MULTIQ, PQ_SEQUENCE,
+            PQ_SKIP, PQ_SLSM, PQ_SPRAY, "nada");
     exit(EXIT_FAILURE);
 }
 
