@@ -31,6 +31,7 @@
 #include <valgrind/callgrind.h>
 #endif
 
+#include "pqs/cppcapq.h"
 #include "pqs/cheap.h"
 #include "pqs/globallock.h"
 #include "pqs/linden.h"
@@ -47,6 +48,10 @@
 #include "itree.h"
 #include "util.h"
 
+#define PQ_CAPQ       "capq"     /* CA-PQ in "The Contention Avoiding Concurrent Priority Queue" LCPC'2016 */
+#define PQ_CADM       "cadm"     /* CA-DM in  ... */
+#define PQ_CAIN       "cain"     /* CA-IN in  ... */
+#define PQ_CATREE     "catree"   /* CATree in ... */
 #define PQ_CHEAP      "cheap"
 #define PQ_DLSM       "dlsm"
 #define PQ_GLOBALLOCK "globallock"
@@ -845,6 +850,21 @@ main(int argc,
         usage();
     }
 
+#ifndef ENABLE_QUALITY
+    if (settings.type == PQ_CAPQ) {
+        kpqbench::CPPCAPQ<true, true, true> pq;
+        ret = bench(&pq, settings);
+    } else if (settings.type == PQ_CADM) {
+        kpqbench::CPPCAPQ<true, false, true> pq;
+        ret = bench(&pq, settings);
+    } else if (settings.type == PQ_CAIN) {
+        kpqbench::CPPCAPQ<false, true, true> pq;
+        ret = bench(&pq, settings);
+    } else if (settings.type == PQ_CATREE) {
+        kpqbench::CPPCAPQ<false, false, true> pq;
+        ret = bench(&pq, settings);
+    } else
+#endif
     if (settings.type == PQ_CHEAP) {
         kpqbench::cheap<KEY_TYPE, VAL_TYPE> pq;
         ret = bench(&pq, settings);

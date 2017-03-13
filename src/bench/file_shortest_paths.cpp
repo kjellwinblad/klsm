@@ -43,35 +43,35 @@ constexpr int DEFAULT_SEED       = 0;
 constexpr int ARRAY_PADDING       = 16;
 static std::string DEFAULT_OUTPUT_FILE = "out.txt";
 
-#define PQ_DLSM       "dlsm"
-#define PQ_GLOBALLOCK "globallock"
-#define PQ_KLSM       "klsm"
-#define PQ_KLSM16     "klsm16"
-#define PQ_KLSM128    "klsm128"
-#define PQ_KLSM256    "klsm256"
-#define PQ_KLSM512   "klsm512"
-#define PQ_KLSM1024   "klsm1024"
-#define PQ_KLSM2048   "klsm2048"
-#define PQ_KLSM4096   "klsm4096"
-#define PQ_KLSM8192   "klsm8192"
-#define PQ_KLSM16384  "klsm16384"
-#define PQ_KLSM32768  "klsm32768"
-#define PQ_KLSM65536  "klsm65536"
+#define PQ_CAPQ        "capq"     /* CA-PQ in "The Contention Avoiding Concurrent Priority Queue" LCPC'2016 */
+#define PQ_CADM        "cadm"     /* CA-DM in  ... */
+#define PQ_CAIN        "cain"     /* CA-IN in  ... */
+#define PQ_CATREE      "catree"   /* CATree in ... */
+#define PQ_DLSM        "dlsm"
+#define PQ_GLOBALLOCK  "globallock"
+#define PQ_KLSM        "klsm"
+#define PQ_KLSM16      "klsm16"
+#define PQ_KLSM128     "klsm128"
+#define PQ_KLSM256     "klsm256"
+#define PQ_KLSM512     "klsm512"
+#define PQ_KLSM1024    "klsm1024"
+#define PQ_KLSM2048    "klsm2048"
+#define PQ_KLSM4096    "klsm4096"
+#define PQ_KLSM8192    "klsm8192"
+#define PQ_KLSM16384   "klsm16384"
+#define PQ_KLSM32768   "klsm32768"
+#define PQ_KLSM65536   "klsm65536"
 #define PQ_KLSM131072  "klsm131072"
-#define PQ_MULTIQC2     "multiqC2"
-#define PQ_MULTIQC4     "multiqC4"
-#define PQ_MULTIQC8     "multiqC8"
-#define PQ_MULTIQC16    "multiqC16"
-#define PQ_MULTIQC32    "multiqC32"
-#define PQ_MULTIQC64    "multiqC64"
-#define PQ_MULTIQC128   "multiqC128"
-#define PQ_MULTIQC256   "multiqC256"
-#define PQ_LINDEN     "linden"
-#define PQ_SPRAYLIST  "spraylist"
-#define PQ_CAPQ "capq"     // CA-PQ in "The Contention Avoiding Concurrent Priority Queue" LCPC'2016
-#define PQ_CADM "cadm"     // CA-DM in  ...
-#define PQ_CAIN "cain"     // CA-IN in  ...
-#define PQ_CATREE "catree" // CATree in ...
+#define PQ_MULTIQC2    "multiqC2"
+#define PQ_MULTIQC4    "multiqC4"
+#define PQ_MULTIQC8    "multiqC8"
+#define PQ_MULTIQC16   "multiqC16"
+#define PQ_MULTIQC32   "multiqC32"
+#define PQ_MULTIQC64   "multiqC64"
+#define PQ_MULTIQC128  "multiqC128"
+#define PQ_MULTIQC256  "multiqC256"
+#define PQ_LINDEN      "linden"
+#define PQ_SPRAYLIST   "spraylist"
 /* Hack to support graphs that are badly formatted */
 #define IGNORE_NODES_WITH_ID_LARGER_THAN_SIZE 1
 /* hwloc does not work on all platforms */

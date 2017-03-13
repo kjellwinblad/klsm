@@ -1,5 +1,4 @@
 #include "cppcapq.h"
-#include <iostream>
 
 extern "C" {
 #include "capq.h"
