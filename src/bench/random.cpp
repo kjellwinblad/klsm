@@ -67,7 +67,6 @@
 #define PQ_SKIP       "skip"
 #define PQ_SLSM       "slsm"
 #define PQ_SPRAY      "spray"
-#define PQ_QDCATREE   "qdcatree"
 
 #ifdef ENABLE_QUALITY
 #define KEY_TYPE      uint32_t
