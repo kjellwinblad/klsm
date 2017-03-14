@@ -130,16 +130,38 @@ usage()
     fprintf(stderr,
             "USAGE: shortest_paths -i input_file [-n num_threads] [-w end_of_range]\n"
             "                      [-s seed] pq\n"
-            "       -i: The input graph file\n"
+            "       -i: The input graph file *\n"
             "       -n: Number of threads (default = %d)\n"
             "       -w: Generate random weights between 0 and end_of_range\n"
             "       -s: The random number generator seed (default = %d)\n"
             "       -o: Output file name (default = %s)\n"
-            "       pq: The data structure to use as the backing priority queue (see source file)\n"
-            "\n",
+            "       pq: The data structure to use as the backing priority queue\n"
+            "           (one of '%s', '%s', '%s', '%s', '%s', '%s',\n"
+            "                   '%s', '%s', '%s', '%s', '%s', '%s',\n"
+            "                   '%s', '%s', '%s', '%s', '%s', '%s',\n"
+            "                   '%s', '%s', '%s', '%s', '%s', '%s',\n"
+            "                   '%s', '%s', '%s', '%s', '%s')\n"
+            "\n"
+            "Output:\n"
+            "The program output the time used for calculating the shortest paths and\n"
+            "the number of nodes processed by the algorithm (separated by a space\n"
+            "character) to standard output. Note that the number of nodes processed\n"
+            "by the algorithm can be more than the number of nodes in the graph if\n"
+            "more than one thread is used.\n"
+            "\n"
+            " * Input graph files can either be obtained from\n"
+            "http://snap.stanford.edu/data/ or generated with the program\n"
+            "generate_random_graph (located in the same folder as this program).\n",
             DEFAULT_NTHREADS,
             DEFAULT_SEED,
-            DEFAULT_OUTPUT_FILE.c_str());
+            DEFAULT_OUTPUT_FILE.c_str(),
+            PQ_CAPQ, PQ_CADM, PQ_CAIN, PQ_CATREE, PQ_DLSM, PQ_GLOBALLOCK,
+            PQ_KLSM, PQ_KLSM16, PQ_KLSM128, PQ_KLSM256, PQ_KLSM512,
+            PQ_KLSM1024, PQ_KLSM2048, PQ_KLSM4096, PQ_KLSM8192, PQ_KLSM16384,
+            PQ_KLSM32768, PQ_KLSM65536, PQ_KLSM131072, PQ_MULTIQC2,
+            PQ_MULTIQC4, PQ_MULTIQC8, PQ_MULTIQC16, PQ_MULTIQC32,
+            PQ_MULTIQC64, PQ_MULTIQC128, PQ_MULTIQC256, PQ_LINDEN,
+            PQ_SPRAYLIST);
     exit(EXIT_FAILURE);
 }
 
@@ -413,7 +435,7 @@ bench_thread(T *pq,
                                 // If the thread's slot has the value 2, it need to be notified
                                 long expected = 2;
                                 if (threads_wait_switches[i].compare_exchange_strong(expected, 3)) {
-                                    // If we succefully changed the thread's slot to 3,
+                                    // If we successfully changed the thread's slot to 3,
                                     // we will decrement wt.threads_waiting_to_succeed and notify the thread
                                     wt.threads_waiting_to_succeed.fetch_sub(2);
                                     threads_wait_switches[i].store(0, std::memory_order_release);

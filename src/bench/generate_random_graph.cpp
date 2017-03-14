@@ -24,6 +24,7 @@
 #include <thread>
 #include <unistd.h>
 #include <iostream>
+
 using namespace std;
 constexpr double DEFAULT_EDGE_P  = 0.5;
 constexpr int DEFAULT_SEED       = 0;
@@ -83,12 +84,26 @@ generate_graph(const size_t n,
     return data;
 }
 
+static void
+usage()
+{
+    fprintf(stderr,
+            "USAGE: generate_random_graph [-n number_of_nodes] [-p edge_probability]\n"
+            "       -n: Number of nodes in generated graph\n"
+            "       -p: Probability of edge between two nodes\n"
+            "\n"
+            "This program can be used to generate random graphs suitable as\n"
+            "input to the file_shortest_paths\n"
+            "benchmark (src/bench/file_shortest_paths.cpp). Other graphs that\n"
+            "are suitable as input for that benchmark can be found at:\n"
+            "http://snap.stanford.edu/data/ .\n");
+    exit(EXIT_FAILURE);
+}
 
 int
 main(int argc,
      char **argv)
 {
-
     int opt;
     size_t number_of_nodes = 1000;
     double edge_probability = 0.5;
@@ -99,23 +114,23 @@ main(int argc,
             errno = 0;
             number_of_nodes = strtoul(optarg, NULL, 0);
             if (errno != 0) {
-                //usage();
+                usage();
             }
             break;
         case 'p':
             errno = 0;
             edge_probability = strtod(optarg, NULL);
             if (errno != 0) {
-                //usage();
+                usage();
             }
             break;
         default:
-            ;//usage();
+            usage();
         }
     }
 
     if (optind != argc - 1) {
-        //usage();
+        usage();
     }
 
     vertex_t *nodes = generate_graph(number_of_nodes,
@@ -123,7 +138,7 @@ main(int argc,
                                      edge_probability,
                                      num_edges);
     std::cout << "# Nodes: " << number_of_nodes << " Edges: " << num_edges << std::endl;
-    //Print the generated graph to stdout
+    // Print the generated graph to stdout
     for (size_t i; i < number_of_nodes ; i++) {
         for (size_t k = 0; k < nodes[i].num_edges; k++) {
             std::cout << i << "\t" << nodes[i].edges[k].target << std::endl;
