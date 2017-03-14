@@ -590,7 +590,6 @@ main(int argc,
         std::cout << ("PAPI_library_init error.\n");
         return 0;
     }
-
     if (PAPI_OK != PAPI_query_event(PAPI_L2_DCA)) {
         std::cout << ("Cannot count PAPI_L2_DCA.\n");
     }

@@ -63,8 +63,8 @@ extern uint8_t levelmax[64];
 typedef unsigned long slkey_t;
 typedef unsigned long val_t;
 typedef intptr_t level_t;
-#define KEY_MIN                         INT_MIN
-#define KEY_MAX                         INT_MAX
+#define KEY_MIN                         0
+#define KEY_MAX                         UINT32_MAX
 #define DEFAULT_VAL                     0
 
 typedef ALIGNED(64) struct sl_node

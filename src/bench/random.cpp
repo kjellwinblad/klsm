@@ -76,11 +76,8 @@
 #define VAL_TYPE      uint32_t
 #endif
 
-
-/*Needed for the combining elimination queue*/
-int _gNumThreads;
+/* Needed for spraylist */
 int number_of_threads;
-
 
 /**
  * Uniform: Each thread performs 50% inserts, 50% deletes.
@@ -838,9 +835,7 @@ main(int argc,
         }
     }
 
-
-    _gNumThreads = settings.nthreads;
-    number_of_threads =  settings.nthreads;
+    number_of_threads = settings.nthreads;
 
     settings.type = argv[optind];
     if (!settings.are_valid()) {
